@@ -112,6 +112,33 @@ class BiBot:
             logger.error(f"Error calculating indicators: {e}")
             raise
 
+    def check_entry_conditions(self, df):
+        """Check if entry conditions are met"""
+        logger.debug("Checking entry conditions...")
+        try:
+            last_row = df.iloc[-1]
+            
+            # RSI conditions
+            rsi_oversold = last_row['rsi'] < config.RSI_OVERSOLD
+            rsi_overbought = last_row['rsi'] > config.RSI_OVERBOUGHT
+            logger.debug(f"RSI: {last_row['rsi']:.2f} (Oversold: {rsi_oversold}, Overbought: {rsi_overbought})")
+            
+            # EMA crossover
+            ema_cross_up = (df['ema_fast'].iloc[-1] > df['ema_slow'].iloc[-1] and
+                          df['ema_fast'].iloc[-2] <= df['ema_slow'].iloc[-2])
+            ema_cross_down = (df['ema_fast'].iloc[-1] < df['ema_slow'].iloc[-1] and
+                            df['ema_fast'].iloc[-2] >= df['ema_slow'].iloc[-2])
+            logger.debug(f"EMA Crossover - Up: {ema_cross_up}, Down: {ema_cross_down}")
+            
+            conditions = {
+                'long': rsi_oversold and ema_cross_up,
+                'short': rsi_overbought and ema_cross_down
+            }
+            logger.debug(f"Entry conditions - Long: {conditions['long']}, Short: {conditions['short']}")
+            return conditions
+        except Exception as e:
+            logger.error(f"Error checking entry conditions: {e}")
+            raise
     
 
 if __name__ == "__main__":
