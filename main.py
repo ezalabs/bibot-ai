@@ -1,4 +1,13 @@
 from binance.client import Client
+from binance.enums import (
+    SIDE_BUY,
+    SIDE_SELL,
+    ORDER_TYPE_MARKET,
+    FUTURE_ORDER_TYPE_STOP_MARKET,
+    FUTURE_ORDER_TYPE_TAKE_PROFIT_MARKET
+)
+import pandas as pd
+import ta
 import time
 import config
 import logging
@@ -83,6 +92,24 @@ class BiBot:
             return df
         except Exception as e:
             logger.error(f"Error fetching historical data: {e}")
+            raise
+    
+    def calculate_indicators(self, df):
+        """Calculate technical indicators"""
+        logger.debug("Calculating technical indicators...")
+        try:
+            # RSI
+            df['rsi'] = ta.momentum.RSIIndicator(df['close'], window=config.RSI_PERIOD).rsi()
+            logger.debug(f"Current RSI: {df['rsi'].iloc[-1]:.2f}")
+            
+            # EMAs
+            df['ema_fast'] = ta.trend.EMAIndicator(df['close'], window=config.EMA_FAST).ema_indicator()
+            df['ema_slow'] = ta.trend.EMAIndicator(df['close'], window=config.EMA_SLOW).ema_indicator()
+            logger.debug(f"Current EMAs - Fast: {df['ema_fast'].iloc[-1]:.2f}, Slow: {df['ema_slow'].iloc[-1]:.2f}")
+            
+            return df
+        except Exception as e:
+            logger.error(f"Error calculating indicators: {e}")
             raise
 
     
