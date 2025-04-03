@@ -1,0 +1,41 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.env
+.venv/
+venv/
+ENV/
+env/
+.python-version
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Poetry
+dist/
+build/
+*.egg-info/
+
+# Logs
+*.log
+logs/
+
+# Local development
+.DS_Store
+.coverage
+htmlcov/
+.pytest_cache/ 
