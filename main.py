@@ -58,6 +58,32 @@ class BiBot:
                 else:
                     logger.error("Failed to connect to Binance after maximum retries")
                     raise Exception("Could not connect to Binance API.")
+                
+    def get_historical_data(self):
+        """Fetch historical klines/candlestick data"""
+        logger.debug(f"Fetching historical data for {config.TRADING_PAIR}")
+        try:
+            klines = self.client.futures_klines(
+                symbol=config.TRADING_PAIR,
+                interval=Client.KLINE_INTERVAL_1MINUTE,
+                limit=100
+            )
+            
+            df = pd.DataFrame(klines, columns=[
+                'timestamp', 'open', 'high', 'low', 'close', 'volume',
+                'close_time', 'quote_volume', 'trades', 'taker_buy_base',
+                'taker_buy_quote', 'ignore'
+            ])
+            
+            # Convert string values to float
+            for col in ['open', 'high', 'low', 'close', 'volume']:
+                df[col] = df[col].astype(float)
+            
+            logger.debug(f"Latest price: {df['close'].iloc[-1]}")
+            return df
+        except Exception as e:
+            logger.error(f"Error fetching historical data: {e}")
+            raise
 
     
 
