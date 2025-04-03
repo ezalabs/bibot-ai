@@ -1,0 +1,2 @@
+# BiBot - Binance Scalping Bot
+

@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "bibot"
+version = "0.1.0"
+description = "BiBot - Python-based trading bot for Binance Futures that implements scalping strategies"
+authors = ["Eza Labs"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+python-binance = "^1.0.19"
+pandas = "^2.1.4"
+numpy = "^1.26.2"
+python-dotenv = "^1.0.0"
+ta = "^0.11.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
