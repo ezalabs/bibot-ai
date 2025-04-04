@@ -136,7 +136,7 @@ class BiBot:
             raise
 
     def place_order(self, side, quantity):
-        """Place a futures order"""
+        """Place a futures order with associated stop loss and take profit orders"""
         logger.info(f"Placing {side} order for {quantity} {config.TRADING_PAIR}")
         try:
             # Place main order
@@ -146,9 +146,13 @@ class BiBot:
                 type=ORDER_TYPE_MARKET,
                 quantity=quantity,
                 newOrderRespType="RESULT"
-
             )
             logger.info(f"Main order placed successfully at {order['avgPrice']}")
+            
+            # Get order ID and position side
+            order_id = order['orderId']
+            position_side = side
+            close_side = SIDE_SELL if side == SIDE_BUY else SIDE_BUY
             
             # Calculate stop loss and take profit prices
             entry_price = float(order['avgPrice'])
@@ -159,42 +163,104 @@ class BiBot:
             
             logger.info(f"Setting stop loss at {stop_loss:.2f} and take profit at {take_profit:.2f}")
             
+            # Store all orders for this position
+            position_info = {
+                'main_order_id': order_id,
+                'entry_price': entry_price,
+                'side': position_side,
+                'quantity': quantity,
+                'orders': []  # Will store related order IDs
+            }
+            
             # Place stop loss order
-            self.client.futures_create_order(
+            sl_order = self.client.futures_create_order(
                 symbol=config.TRADING_PAIR,
-                side=SIDE_SELL if side == SIDE_BUY else SIDE_BUY,
+                side=close_side,
                 type=FUTURE_ORDER_TYPE_STOP_MARKET,
                 stopPrice=stop_loss,
-                quantity=quantity
+                quantity=quantity,
+                reduceOnly=True,  # Important: ensures this only reduces the position
+                closePosition=False  # Not closing entire position if partial
             )
-            logger.info("Stop loss order placed successfully")
+            logger.info(f"Stop loss order placed successfully: ID {sl_order['orderId']}")
+            position_info['orders'].append({'type': 'stop_loss', 'id': sl_order['orderId']})
             
             # Place take profit order
-            self.client.futures_create_order(
+            tp_order = self.client.futures_create_order(
                 symbol=config.TRADING_PAIR,
-                side=SIDE_SELL if side == SIDE_BUY else SIDE_BUY,
+                side=close_side,
                 type=FUTURE_ORDER_TYPE_TAKE_PROFIT_MARKET,
                 stopPrice=take_profit,
-                quantity=quantity
+                quantity=quantity,
+                reduceOnly=True,  # Important: ensures this only reduces the position
+                closePosition=False  # Not closing entire position if partial
             )
-            logger.info("Take profit order placed successfully")
+            logger.info(f"Take profit order placed successfully: ID {tp_order['orderId']}")
+            position_info['orders'].append({'type': 'take_profit', 'id': tp_order['orderId']})
             
-            return order
+            # Add to active positions list
+            self.active_positions.append(position_info)
+            
+            return position_info
         except Exception as e:
             logger.error(f"Error placing order: {e}")
             return None
+
+    def check_closed_positions(self):
+        """Check for positions that have been closed and clean up related orders"""
+        positions_to_remove = []
+        
+        for i, position in enumerate(self.active_positions):
+            # Check if position is still open
+            position_info = self.client.futures_position_information(symbol=config.TRADING_PAIR)
+            position_closed = True  # Assume closed until proven open
+            
+            for p in position_info:
+                if p['symbol'] == config.TRADING_PAIR and float(p['positionAmt']) != 0:
+                    position_closed = False
+                    break
+            
+            if position_closed:
+                # Cancel any remaining orders for this position
+                for order_info in position['orders']:
+                    try:
+                        self.client.futures_cancel_order(
+                            symbol=config.TRADING_PAIR,
+                            orderId=order_info['id']
+                        )
+                        logger.info(f"Cancelled order {order_info['id']} for closed position")
+                    except:
+                        logger.info(f"Order {order_info['id']} already executed or cancelled")
+                
+                positions_to_remove.append(i)
+        
+        # Remove closed positions from the tracking list
+        for index in sorted(positions_to_remove, reverse=True):
+            logger.info(f"Removing closed position from tracking: {self.active_positions[index]}")
+            self.active_positions.pop(index)
 
     def run(self):
         """Main bot loop"""
         logger.info(f"Starting BiBot for {config.TRADING_PAIR}")
         logger.info(f"Configuration - Leverage: {config.LEVERAGE}x, Position Size: {config.POSITION_SIZE}, Max Positions: {config.MAX_POSITIONS}")
         
+        check_positions_interval = 30  # Check for closed positions every 30 seconds
+        last_check_time = 0
+        
         while True:
             try:
+                current_time = time.time()
+                
+                # Periodically check for closed positions
+                if current_time - last_check_time > check_positions_interval:
+                    logger.debug("Checking for closed positions...")
+                    self.check_closed_positions()
+                    last_check_time = current_time
+                
                 # Check if we can open new positions
                 if len(self.active_positions) >= config.MAX_POSITIONS:
                     logger.info("Maximum positions reached, waiting...")
-                    time.sleep(60)
+                    time.sleep(10)  # Sleep for a shorter time to check positions more frequently
                     continue
                 
                 # Get historical data and calculate indicators
@@ -204,7 +270,6 @@ class BiBot:
                 # Check entry conditions
                 conditions = self.check_entry_conditions(df)
                 
-                current_time = time.time()
                 if current_time - self.last_trade_time < self.min_trade_interval:
                     logger.debug("Waiting for minimum trade interval...")
                     time.sleep(1)
@@ -215,14 +280,14 @@ class BiBot:
                     logger.info("Long entry conditions met, placing order...")
                     order = self.place_order(SIDE_BUY, config.POSITION_SIZE)
                     if order:
-                        logger.info(f"Long position opened at {order['avgPrice']}")
+                        logger.info(f"Long position opened at {order['entry_price']}")
                         self.last_trade_time = current_time
                 
                 elif conditions['short']:
                     logger.info("Short entry conditions met, placing order...")
                     order = self.place_order(SIDE_SELL, config.POSITION_SIZE)
                     if order:
-                        logger.info(f"Short position opened at {order['avgPrice']}")
+                        logger.info(f"Short position opened at {order['entry_price']}")
                         self.last_trade_time = current_time
                 
                 time.sleep(1)  # Wait 1 second before next iteration
