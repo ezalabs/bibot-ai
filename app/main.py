@@ -9,18 +9,13 @@ from binance.enums import (
 import pandas as pd
 import ta
 import time
+from logger import get_logger
 import config
-import logging
 from binance.exceptions import BinanceAPIException
 import requests.exceptions
 
 # Configure logging
-logging.basicConfig(
-    level=config.LOG_LEVEL,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 class BiBot:
     def __init__(self):
@@ -241,4 +236,4 @@ class BiBot:
 
 if __name__ == "__main__":
     bot = BiBot()
-    bot.run() 
+    bot.run()
