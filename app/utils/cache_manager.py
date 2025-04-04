@@ -1,6 +1,6 @@
 import json
 import os
-from logger import get_logger
+from app.utils.logger import get_logger
 from pathlib import Path
 
 # Configure logging

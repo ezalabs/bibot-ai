@@ -14,6 +14,8 @@ if API_KEY is None:
 
 LOG_LEVEL = os.getenv('LOG_LEVEL') or 'INFO'
 
+STRATEGY = os.getenv('STRATEGY') or 'RSI_EMA'
+
 TRADING_PAIR = os.getenv('TRADING_PAIR') or 'BTCUSDT'  # Trading pair
 # This defines what you're trading: Bitcoin (BTC) against Tether (USDC)
 # You could change this to other pairs like 'ETHUSDT' for Ethereum or 'SOLUSDT' for Solana

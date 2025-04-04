@@ -2,8 +2,9 @@
 name = "bibot"
 version = "0.1.0"
 description = "BiBot - Python-based trading bot for Binance Futures that implements scalping strategies"
-authors = ["Eza Labs"]
+authors = ["Eza Labs - carlo@ezalabs.io"]
 readme = "README.md"
+packages = [{include = "app"}]
 
 [tool.poetry.dependencies]
 python = "^3.9"
