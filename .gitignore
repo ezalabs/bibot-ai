@@ -133,3 +133,6 @@ dmypy.json
 
 # Etc
 .idea
+
+# Cache files
+/cache/

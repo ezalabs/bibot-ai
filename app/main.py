@@ -9,6 +9,9 @@ from binance.enums import (
 import pandas as pd
 import ta
 import time
+import signal
+import sys
+from cache_manager import CacheManager
 from logger import get_logger
 import config
 from binance.exceptions import BinanceAPIException
@@ -16,6 +19,19 @@ import requests.exceptions
 
 # Configure logging
 logger = get_logger()
+
+# Signal handler for graceful shutdown
+def signal_handler(sig, frame):
+    """Handle shutdown signals by saving state before exit"""
+    logger.info("Shutdown signal received, saving state...")
+    if 'bot' in globals() and hasattr(bot, '_save_positions_to_cache'):
+        bot._save_positions_to_cache()
+    logger.info("State saved, exiting")
+    sys.exit(0)
+
+# Register signal handlers
+signal.signal(signal.SIGINT, signal_handler)  # Handle Ctrl+C
+signal.signal(signal.SIGTERM, signal_handler)  # Handle termination signal
 
 class BiBot:
     def __init__(self):
@@ -34,10 +50,17 @@ class BiBot:
             logger.error(f"Failed to set leverage: {e}")
             raise
         
+        # Initialize cache manager for positions
+        self.positions_cache = CacheManager(f"positions_{config.TRADING_PAIR}")
+        
         # Initialize trading state
         self.active_positions = []
         self.last_trade_time = 0
         self.min_trade_interval = 60  # Minimum seconds between trades
+        
+        # Load active positions from cache
+        self._load_positions_from_cache()
+        
         logger.info("BiBot initialization completed")
 
     def _initialize_client(self, max_retries=3, retry_delay=5):
@@ -55,13 +78,49 @@ class BiBot:
                 logger.info(f"Successfully connected to Binance {'Testnet' if config.USE_TESTNET else 'Mainnet'}")
                 return
             except (BinanceAPIException, requests.exceptions.RequestException) as e:
-                logger.error(f"Connection attempt {attempt + 1} failed. Status code {str(e.status_code)}")
+                logger.error(f"Connection attempt {attempt + 1} failed: {e}")
                 if attempt < max_retries - 1:
                     logger.info(f"Waiting {retry_delay} seconds before retrying...")
                     time.sleep(retry_delay)
                 else:
                     logger.error("Failed to connect to Binance after maximum retries")
                     raise Exception("Could not connect to Binance API.")
+
+    def _load_positions_from_cache(self):
+        """Load active positions from cache and validate them"""
+        cached_positions = self.positions_cache.load()
+        
+        if cached_positions is None:
+            logger.info("No positions found in cache")
+            return
+            
+        if not isinstance(cached_positions, list):
+            logger.warning("Invalid cache format for positions, expected a list")
+            return
+            
+        valid_positions = []
+        for position in cached_positions:
+            # Validate position structure
+            if all(key in position for key in ['main_order_id', 'entry_price', 'side', 'quantity', 'orders']):
+                valid_positions.append(position)
+            else:
+                logger.warning(f"Skipped invalid position from cache: {position}")
+        
+        self.active_positions = valid_positions
+        logger.info(f"Loaded {len(valid_positions)} valid positions from cache")
+        
+        # Check for closed positions right after loading
+        if valid_positions:
+            logger.info("Checking status of cached positions...")
+            self.check_closed_positions()
+            
+    def _save_positions_to_cache(self):
+        """Save current active positions to cache"""
+        result = self.positions_cache.save(self.active_positions)
+        if not result:
+            logger.warning("Failed to save positions to cache")
+        else:
+            logger.debug(f"Saved {len(self.active_positions)} positions to cache")
 
     def get_historical_data(self):
         """Fetch historical klines/candlestick data"""
@@ -201,6 +260,9 @@ class BiBot:
             # Add to active positions list
             self.active_positions.append(position_info)
             
+            # Save updated positions to cache
+            self._save_positions_to_cache()
+            
             return position_info
         except Exception as e:
             logger.error(f"Error placing order: {e}")
@@ -238,6 +300,40 @@ class BiBot:
         for index in sorted(positions_to_remove, reverse=True):
             logger.info(f"Removing closed position from tracking: {self.active_positions[index]}")
             self.active_positions.pop(index)
+        
+        # If any positions were removed, update the cache
+        if positions_to_remove:
+            self._save_positions_to_cache()
+
+    def cleanup_all_positions(self):
+        """Force cleanup of all tracked positions"""
+        logger.info("Performing cleanup of all tracked positions...")
+        
+        # Get all open orders
+        open_orders = self.client.futures_get_open_orders(symbol=config.TRADING_PAIR)
+        order_ids = [order['orderId'] for order in open_orders]
+        
+        # Try to cancel each order
+        for position in self.active_positions:
+            for order_info in position['orders']:
+                order_id = order_info['id']
+                if order_id in order_ids:
+                    try:
+                        self.client.futures_cancel_order(
+                            symbol=config.TRADING_PAIR,
+                            orderId=order_id
+                        )
+                        logger.info(f"Cancelled order {order_id}")
+                    except Exception as e:
+                        logger.warning(f"Could not cancel order {order_id}: {e}")
+        
+        # Clear active positions list
+        self.active_positions = []
+        
+        # Clear the cache
+        self.positions_cache.clear()
+        
+        logger.info("Cleanup completed, all positions have been cleared from tracking")
 
     def run(self):
         """Main bot loop"""
@@ -297,8 +393,18 @@ class BiBot:
                 logger.info("Waiting 60 seconds before retrying...")
                 time.sleep(60)  # Wait 1 minute before retrying
 
-    
-
 if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='BiBot - Binance Futures Trading Bot')
+    parser.add_argument('--cleanup', action='store_true', help='Clean up all tracked positions and exit')
+    args = parser.parse_args()
+    
     bot = BiBot()
+    
+    if args.cleanup:
+        bot.cleanup_all_positions()
+        logger.info("Cleanup completed, exiting")
+        sys.exit(0)
+    
     bot.run()
