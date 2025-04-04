@@ -8,20 +8,16 @@ from binance.enums import (
 )
 import pandas as pd
 import time
-import config
+
 from binance.exceptions import BinanceAPIException
 import requests.exceptions
+from app.config import load_config
 from app.utils.logger import get_logger
 from app.utils.cache_manager import CacheManager
 from app.core.strategies.rsi_ema_strategy import RsiEmaStrategy
 
 # Configure logging
 logger = get_logger()
-
-STRATEGIES = {
-    'RSI_EMA': RsiEmaStrategy,
-    # Add more strategies here
-}
 
 class BiBot:
     """
@@ -30,6 +26,8 @@ class BiBot:
     """
     
     def __init__(self):
+        """Initialize the trading bot with the given configuration"""
+        self.config = load_config()
         logger.info("Initializing BiBot ...")
         self.client = None
         self._initialize_client()
@@ -37,24 +35,19 @@ class BiBot:
         # Set leverage
         try:
             self.client.futures_change_leverage(
-                symbol=config.TRADING_PAIR,
-                leverage=config.LEVERAGE
+                symbol=self.config.trading.trading_pair,
+                leverage=self.config.trading.leverage
             )
-            logger.info(f"Set leverage to {config.LEVERAGE}x for {config.TRADING_PAIR}")
+            logger.info(f"Set leverage to {self.config.trading.leverage}x for {self.config.trading.trading_pair}")
         except Exception as e:
             logger.error(f"Failed to set leverage: {e}")
             raise
         
         # Initialize cache manager for positions
-        self.positions_cache = CacheManager(f"positions_{config.TRADING_PAIR}")
+        self.positions_cache = CacheManager(f"positions_{self.config.trading.trading_pair}")
         
-        # Select strategy based on configuration
-        strategy_class = STRATEGIES.get(config.STRATEGY)
-        if not strategy_class:
-            logger.warning(f"Strategy {config.STRATEGY} not found, using RsiEmaStrategy")
-            strategy_class = RsiEmaStrategy
-        
-        self.strategy = strategy_class()
+        # Initialize the trading strategy
+        self.strategy = self._create_strategy()
         logger.info(f"Using trading strategy: {self.strategy.get_name()}")
         
         # Initialize trading state
@@ -67,19 +60,27 @@ class BiBot:
         
         logger.info("BiBot initialization completed")
 
+    def _create_strategy(self):
+        """Create the trading strategy based on configuration"""
+        if self.config.strategy == "RSI_EMA":
+            return RsiEmaStrategy()
+        else:
+            logger.warning(f"Unknown strategy {self.config.strategy}, defaulting to RSI_EMA")
+            return RsiEmaStrategy()
+
     def _initialize_client(self, max_retries=3, retry_delay=5):
         """Initialize the Binance client with retry logic"""
         for attempt in range(max_retries):
             try:
-                logger.info(f"Attempting to connect to Binance {'Testnet' if config.USE_TESTNET else 'Mainnet'} (Attempt {attempt + 1} / {max_retries})")
+                logger.info(f"Attempting to connect to Binance {'Testnet' if self.config.trading.use_testnet else 'Mainnet'} (Attempt {attempt + 1} / {max_retries})")
                 self.client = Client(
-                    config.API_KEY, 
-                    config.API_SECRET, 
-                    testnet=config.USE_TESTNET
+                    self.config.credentials.api_key, 
+                    self.config.credentials.api_secret, 
+                    testnet=self.config.trading.use_testnet
                 )
                 # Test the connection
                 self.client.ping()
-                logger.info(f"Successfully connected to Binance {'Testnet' if config.USE_TESTNET else 'Mainnet'}")
+                logger.info(f"Successfully connected to Binance {'Testnet' if self.config.trading.use_testnet else 'Mainnet'}")
                 return
             except (BinanceAPIException, requests.exceptions.RequestException) as e:
                 logger.error(f"Connection attempt {attempt + 1} failed: {e}")
@@ -128,10 +129,10 @@ class BiBot:
 
     def get_historical_data(self):
         """Fetch historical klines/candlestick data"""
-        logger.debug(f"Fetching historical data for {config.TRADING_PAIR}")
+        logger.debug(f"Fetching historical data for {self.config.trading.trading_pair}")
         try:
             klines = self.client.futures_klines(
-                symbol=config.TRADING_PAIR,
+                symbol=self.config.trading.trading_pair,
                 interval=Client.KLINE_INTERVAL_1MINUTE,
                 limit=100
             )
@@ -154,11 +155,11 @@ class BiBot:
 
     def place_order(self, side, quantity):
         """Place a futures order with associated stop loss and take profit orders"""
-        logger.info(f"Placing {side} order for {quantity} {config.TRADING_PAIR}")
+        logger.info(f"Placing {side} order for {quantity} {self.config.trading.trading_pair}")
         try:
             # Place main order
             order = self.client.futures_create_order(
-                symbol=config.TRADING_PAIR,
+                symbol=self.config.trading.trading_pair,
                 side=side,
                 type=ORDER_TYPE_MARKET,
                 quantity=quantity,
@@ -173,10 +174,10 @@ class BiBot:
             
             # Calculate stop loss and take profit prices
             entry_price = float(order['avgPrice'])
-            stop_loss = round(entry_price * (1 - config.STOP_LOSS_PERCENTAGE / 100) 
-                              if side == SIDE_BUY else entry_price * (1 + config.STOP_LOSS_PERCENTAGE / 100), 1)
-            take_profit = round(entry_price * (1 + config.TAKE_PROFIT_PERCENTAGE / 100) 
-                                if side == SIDE_BUY else entry_price * (1 - config.TAKE_PROFIT_PERCENTAGE / 100), 1)
+            stop_loss = round(entry_price * (1 - self.config.trading.stop_loss_percentage / 100) 
+                              if side == SIDE_BUY else entry_price * (1 + self.config.trading.stop_loss_percentage / 100), 1)
+            take_profit = round(entry_price * (1 + self.config.trading.take_profit_percentage / 100) 
+                                if side == SIDE_BUY else entry_price * (1 - self.config.trading.take_profit_percentage / 100), 1)
             
             logger.info(f"Setting stop loss at {stop_loss:.2f} and take profit at {take_profit:.2f}")
             
@@ -191,7 +192,7 @@ class BiBot:
             
             # Place stop loss order
             sl_order = self.client.futures_create_order(
-                symbol=config.TRADING_PAIR,
+                symbol=self.config.trading.trading_pair,
                 side=close_side,
                 type=FUTURE_ORDER_TYPE_STOP_MARKET,
                 stopPrice=stop_loss,
@@ -204,7 +205,7 @@ class BiBot:
             
             # Place take profit order
             tp_order = self.client.futures_create_order(
-                symbol=config.TRADING_PAIR,
+                symbol=self.config.trading.trading_pair,
                 side=close_side,
                 type=FUTURE_ORDER_TYPE_TAKE_PROFIT_MARKET,
                 stopPrice=take_profit,
@@ -232,11 +233,11 @@ class BiBot:
         
         for i, position in enumerate(self.active_positions):
             # Check if position is still open
-            position_info = self.client.futures_position_information(symbol=config.TRADING_PAIR)
+            position_info = self.client.futures_position_information(symbol=self.config.trading.trading_pair)
             position_closed = True  # Assume closed until proven open
             
             for p in position_info:
-                if p['symbol'] == config.TRADING_PAIR and float(p['positionAmt']) != 0:
+                if p['symbol'] == self.config.trading.trading_pair and float(p['positionAmt']) != 0:
                     position_closed = False
                     break
             
@@ -245,7 +246,7 @@ class BiBot:
                 for order_info in position['orders']:
                     try:
                         self.client.futures_cancel_order(
-                            symbol=config.TRADING_PAIR,
+                            symbol=self.config.trading.trading_pair,
                             orderId=order_info['id']
                         )
                         logger.info(f"Cancelled order {order_info['id']} for closed position")
@@ -268,7 +269,7 @@ class BiBot:
         logger.info("Performing cleanup of all tracked positions...")
         
         # Get all open orders
-        open_orders = self.client.futures_get_open_orders(symbol=config.TRADING_PAIR)
+        open_orders = self.client.futures_get_open_orders(symbol=self.config.trading.trading_pair)
         order_ids = [order['orderId'] for order in open_orders]
         
         # Try to cancel each order
@@ -278,7 +279,7 @@ class BiBot:
                 if order_id in order_ids:
                     try:
                         self.client.futures_cancel_order(
-                            symbol=config.TRADING_PAIR,
+                            symbol=self.config.trading.trading_pair,
                             orderId=order_id
                         )
                         logger.info(f"Cancelled order {order_id}")
@@ -320,8 +321,8 @@ class BiBot:
 
     def run(self):
         """Main bot loop"""
-        logger.info(f"Starting BiBot for {config.TRADING_PAIR}")
-        logger.info(f"Configuration - Leverage: {config.LEVERAGE}x, Position Size: {config.POSITION_SIZE}, Max Positions: {config.MAX_POSITIONS}")
+        logger.info(f"Starting BiBot for {self.config.trading.trading_pair}")
+        logger.info(f"Configuration - Leverage: {self.config.trading.leverage}x, Position Size: {self.config.trading.position_size}, Max Positions: {self.config.trading.max_positions}")
         
         check_positions_interval = 30  # Check for closed positions every 30 seconds
         last_check_time = 0
@@ -337,7 +338,7 @@ class BiBot:
                     last_check_time = current_time
                 
                 # Check if we can open new positions
-                if len(self.active_positions) >= config.MAX_POSITIONS:
+                if len(self.active_positions) >= self.config.trading.max_positions:
                     logger.info("Maximum positions reached, waiting...")
                     time.sleep(10)  # Sleep for a shorter time to check positions more frequently
                     continue
@@ -355,14 +356,14 @@ class BiBot:
                 # Execute trades based on conditions
                 if signals['long']:
                     logger.info("Long entry conditions met, placing order...")
-                    order = self.place_order(SIDE_BUY, config.POSITION_SIZE)
+                    order = self.place_order(SIDE_BUY, self.config.trading.position_size)
                     if order:
                         logger.info(f"Long position opened at {order['entry_price']}")
                         self.last_trade_time = current_time
                 
                 elif signals['short']:
                     logger.info("Short entry conditions met, placing order...")
-                    order = self.place_order(SIDE_SELL, config.POSITION_SIZE)
+                    order = self.place_order(SIDE_SELL, self.config.trading.position_size)
                     if order:
                         logger.info(f"Short position opened at {order['entry_price']}")
                         self.last_trade_time = current_time

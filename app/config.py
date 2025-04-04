@@ -1,72 +1,117 @@
-from dotenv import load_dotenv
+from pydantic import BaseModel, Field, field_validator, model_validator
 import os
+from typing import Optional, Literal, Union
+from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
-# API Configuration
-API_KEY = os.getenv('BINANCE_API_KEY')
-if API_KEY is None:
-    raise Exception("API key not present")
 
-API_SECRET = os.getenv('BINANCE_API_SECRET')
-if API_KEY is None:
-    raise Exception("Secret key not present")
+class BinanceCredentials(BaseModel):
+    """Binance API credentials configuration"""
+    api_key: str
+    api_secret: str
+    
+    @field_validator('api_key', 'api_secret')
+    @classmethod
+    def validate_credentials(cls, v):
+        if not v:
+            raise ValueError("API credentials cannot be empty")
+        return v
 
-LOG_LEVEL = os.getenv('LOG_LEVEL') or 'INFO'
+class TradingConfig(BaseModel):
+    """Trading parameters configuration"""
+    trading_pair: str = Field(default="BTCUSDT", description="Trading pair symbol")
+    position_size: float = Field(default=0.01, gt=0, description="Position size in base asset")
+    leverage: int = Field(default=5, gt=0, le=125, description="Leverage for futures trading")
+    take_profit_percentage: float = Field(default=0.1, gt=0, description="Take profit percentage")
+    stop_loss_percentage: float = Field(default=0.05, gt=0, description="Stop loss percentage")
+    max_positions: int = Field(default=3, ge=1, description="Maximum number of concurrent positions")
+    use_testnet: bool = Field(default=True, description="Whether to use Binance testnet")
 
-STRATEGY = os.getenv('STRATEGY') or 'RSI_EMA'
+class RsiEmaConfig(BaseModel):
+    """RSI and EMA strategy specific configuration"""
+    rsi_period: int = Field(default=14, gt=0, description="RSI indicator period")
+    rsi_overbought: float = Field(default=70.0, ge=50.0, le=100.0, description="RSI overbought threshold")
+    rsi_oversold: float = Field(default=30.0, ge=0.0, le=50.0, description="RSI oversold threshold")
+    ema_fast: int = Field(default=9, gt=0, description="Fast EMA period")
+    ema_slow: int = Field(default=21, gt=0, description="Slow EMA period")
+    
+    @field_validator('ema_slow')
+    @classmethod
+    def validate_ema_relationship(cls, v, info):
+        if 'ema_fast' in info.data and v <= info.data['ema_fast']:
+            raise ValueError(f"Slow EMA period ({v}) must be greater than fast EMA period ({info.data['ema_fast']})")
+        return v
 
-TRADING_PAIR = os.getenv('TRADING_PAIR') or 'BTCUSDT'  # Trading pair
-# This defines what you're trading: Bitcoin (BTC) against Tether (USDC)
-# You could change this to other pairs like 'ETHUSDT' for Ethereum or 'SOLUSDT' for Solana
+class LoggingConfig(BaseModel):
+    """Logging configuration"""
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
+        default="INFO", 
+        description="Logging level"
+    )
 
-POSITION_SIZE = os.getenv('POSITION_SIZE') or 0.01  # Position size in BTC
-# This means each trade will involve 0.01 BTC
-# At current prices (~$65,000/BTC), this would be approximately $650 per position
-# This is a relatively conservative position size for risk management
+class BiBotConfig(BaseModel):
+    """Main configuration for the trading bot"""
+    credentials: BinanceCredentials
+    trading: TradingConfig = Field(default_factory=TradingConfig)
+    rsi_ema: RsiEmaConfig = Field(default_factory=RsiEmaConfig)
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    strategy: str = Field(default="RSI_EMA", description="Trading strategy to use")
 
-LEVERAGE = os.getenv('LEVERAGE') or 5  # Leverage for futures trading
-# 5x leverage means you can control 5 times more assets than your capital
-# Example: With $1,000, you can open positions worth $5,000
-# Higher leverage = higher potential profits but also higher risk
-# 5x is considered moderate leverage (Binance offers up to 125x)
+    @model_validator(mode='before')
+    @classmethod
+    def build_from_flat_dict(cls, values):
+        """
+        Allows the config to be created from a flat dictionary or environment variables
+        This makes it compatible with the existing config approach
+        """
+        if all(k in values for k in ['credentials', 'trading', 'rsi_ema', 'logging']):
+            # Already in the right structure
+            return values
+            
+        # Create a properly structured dict
+        structured = {
+            'credentials': {
+                'api_key': values.get('api_key', os.getenv('BINANCE_API_KEY', '')),
+                'api_secret': values.get('api_secret', os.getenv('BINANCE_API_SECRET', '')),
+            },
+            'trading': {
+                'trading_pair': values.get('trading_pair', os.getenv('TRADING_PAIR', 'BTCUSDT')),
+                'position_size': float(values.get('position_size', os.getenv('POSITION_SIZE', 0.01))),
+                'leverage': int(values.get('leverage', os.getenv('LEVERAGE', 5))),
+                'take_profit_percentage': float(values.get('take_profit_percentage', os.getenv('TAKE_PROFIT_PERCENTAGE', 0.1))),
+                'stop_loss_percentage': float(values.get('stop_loss_percentage', os.getenv('STOP_LOSS_PERCENTAGE', 0.05))),
+                'max_positions': int(values.get('max_positions', os.getenv('MAX_POSITIONS', 3))),
+                'use_testnet': bool(values.get('use_testnet', os.getenv('USE_TESTNET', 'True').lower() == 'true')),
+            },
+            'rsi_ema': {
+                'rsi_period': int(values.get('rsi_period', os.getenv('RSI_PERIOD', 14))),
+                'rsi_overbought': float(values.get('rsi_overbought', os.getenv('RSI_OVERBOUGHT', 70))),
+                'rsi_oversold': float(values.get('rsi_oversold', os.getenv('RSI_OVERSOLD', 30))),
+                'ema_fast': int(values.get('ema_fast', os.getenv('EMA_FAST', 9))),
+                'ema_slow': int(values.get('ema_slow', os.getenv('EMA_SLOW', 21))),
+            },
+            'logging': {
+                'log_level': values.get('log_level', os.getenv('LOG_LEVEL', 'INFO')).upper(),
+            },
+            'strategy': values.get('strategy', os.getenv('STRATEGY', 'RSI_EMA')),
+        }
+        return structured
 
-# Scalping Parameters
-TAKE_PROFIT_PERCENTAGE = os.getenv('TAKE_PROFIT_PERCENTAGE') or 0.1  # 0.1% take profit
-# The bot will close positions when profit reaches 0.1%
-# With 5x leverage, this translates to 0.5% return on investment
-# Example: $1,000 position → $1,005 (before fees)
-# This is a typical target for scalping strategy (small, quick profits)
-
-STOP_LOSS_PERCENTAGE = os.getenv('STOP_LOSS_PERCENTAGE') or 0.05   # 0.05% stop loss
-# Positions will be closed if losses reach 0.05%
-# With 5x leverage, this means 0.25% loss on investment
-# Example: $1,000 position → $997.50 (before fees)
-# The stop loss is tighter than take profit (2:1 risk-reward ratio)
-
-MAX_POSITIONS = os.getenv('MAX_POSITIONS') or 3  # Maximum number of concurrent positions
-# Bot can have up to 3 open trades at once
-# This helps distribute risk across multiple opportunities
-# Also prevents overexposure to the market
-
-# Technical Analysis Parameters
-RSI_PERIOD = os.getenv('RSI_PERIOD') or 14
-RSI_OVERBOUGHT = os.getenv('RSI_OVERBOUGHT') or 70
-RSI_OVERSOLD = os.getenv('RSI_OVERSOLD') or 30
-# RSI (Relative Strength Index) measures momentum
-# 14 periods is the standard setting
-# Above 70 = potentially overbought (sell signal)
-# Below 30 = potentially oversold (buy signal)
-# These are conservative thresholds (some use 80/20)
-
-EMA_FAST = os.getenv('EMA_FAST') or 9
-EMA_SLOW = os.getenv('EMA_SLOW') or 21
-# EMA (Exponential Moving Average) tracks trend
-# Fast EMA (9 periods) reacts quickly to price changes
-# Slow EMA (21 periods) shows longer-term trend
-# When fast crosses above slow = potential buy signal
-# When fast crosses below slow = potential sell signal
-
-# Testnet Configuration
-USE_TESTNET = os.getenv('USE_TESTNET') or True  # Set to False for live trading
-TESTNET_URL = 'https://testnet.binance.vision'
+def load_config() -> BiBotConfig:
+    """
+    Load configuration from environment variables and validate using Pydantic.
+    
+    Returns:
+        BiBotConfig: Validated configuration object
+    
+    Raises:
+        ValidationError: If the configuration is invalid
+    """
+    try:
+        config = BiBotConfig()
+        print(f"Configuration loaded successfully with trading pair: {config.trading.trading_pair}")
+        return config
+    except Exception as e:
+        print(f"Error loading configuration: {e}")
+        raise

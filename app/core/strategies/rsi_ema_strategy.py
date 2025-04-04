@@ -1,7 +1,7 @@
 import ta
+from app.config import load_config
+from app.core.strategies.strategy_base import TradingStrategy
 from app.utils.logger import get_logger
-import app.config as config
-from .strategy_base import TradingStrategy
 
 # Configure logging
 logger = get_logger()
@@ -17,8 +17,10 @@ class RsiEmaStrategy(TradingStrategy):
         Initialize the RSI-EMA strategy.
         """
         super().__init__()
-        logger.info(f"Initializing {self.get_name()} with RSI({config.RSI_PERIOD}) "
-                    f"and EMA({config.EMA_FAST}/{config.EMA_SLOW})")
+        # Load config using the Pydantic model
+        self.config = load_config()
+        logger.info(f"Initializing {self.get_name()} with RSI({self.config.rsi_ema.rsi_period}) "
+                    f"and EMA({self.config.rsi_ema.ema_fast}/{self.config.rsi_ema.ema_slow})")
     
     def generate_trading_signals(self, df):
         """
@@ -35,21 +37,32 @@ class RsiEmaStrategy(TradingStrategy):
         
         try:
             # Calculate RSI
-            df['rsi'] = ta.momentum.RSIIndicator(df['close'], window=config.RSI_PERIOD).rsi()
+            df['rsi'] = ta.momentum.RSIIndicator(
+                df['close'], 
+                window=self.config.rsi_ema.rsi_period
+            ).rsi()
             logger.debug(f"Current RSI: {df['rsi'].iloc[-1]:.2f}")
             
             # Calculate EMAs
-            df['ema_fast'] = ta.trend.EMAIndicator(df['close'], window=config.EMA_FAST).ema_indicator()
-            df['ema_slow'] = ta.trend.EMAIndicator(df['close'], window=config.EMA_SLOW).ema_indicator()
+            df['ema_fast'] = ta.trend.EMAIndicator(
+                df['close'], 
+                window=self.config.rsi_ema.ema_fast
+            ).ema_indicator()
             
-            logger.debug(f"Current EMAs - Fast: {df['ema_fast'].iloc[-1]:.2f}, "f"Slow: {df['ema_slow'].iloc[-1]:.2f}")
+            df['ema_slow'] = ta.trend.EMAIndicator(
+                df['close'], 
+                window=self.config.rsi_ema.ema_slow
+            ).ema_indicator()
+            
+            logger.debug(f"Current EMAs - Fast: {df['ema_fast'].iloc[-1]:.2f}, "
+                         f"Slow: {df['ema_slow'].iloc[-1]:.2f}")
             
             # Check entry conditions
             last_row = df.iloc[-1]
             
             # RSI conditions
-            rsi_oversold = last_row['rsi'] < config.RSI_OVERSOLD
-            rsi_overbought = last_row['rsi'] > config.RSI_OVERBOUGHT
+            rsi_oversold = last_row['rsi'] < self.config.rsi_ema.rsi_oversold
+            rsi_overbought = last_row['rsi'] > self.config.rsi_ema.rsi_overbought
             
             # EMA crossover
             ema_cross_up = (df['ema_fast'].iloc[-1] > df['ema_slow'].iloc[-1] and
@@ -57,6 +70,10 @@ class RsiEmaStrategy(TradingStrategy):
             
             ema_cross_down = (df['ema_fast'].iloc[-1] < df['ema_slow'].iloc[-1] and
                              df['ema_fast'].iloc[-2] >= df['ema_slow'].iloc[-2])
+            
+            logger.debug(f"RSI: {last_row['rsi']:.2f} (Oversold: {rsi_oversold}, "
+                         f"Overbought: {rsi_overbought})")
+            logger.debug(f"EMA Crossover - Up: {ema_cross_up}, Down: {ema_cross_down}")
             
             # Generate signals
             signals = {

@@ -13,6 +13,7 @@ pandas = "^2.1.4"
 numpy = "^1.26.2"
 python-dotenv = "^1.0.0"
 ta = "^0.11.0"
+pydantic = "^2.11.2"
 
 [build-system]
 requires = ["poetry-core"]
