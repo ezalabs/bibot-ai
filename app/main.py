@@ -2,7 +2,8 @@
 import argparse
 import signal
 import sys
-from app.utils.logger import get_logger
+from app.config.settings import load_config
+from app.utils.logging.logger import get_logger
 from app.core.bibot import BiBot
 
 # Configure logging
@@ -31,7 +32,7 @@ def main():
     args = parser.parse_args()
     
     global bot
-    bot = BiBot()
+    bot = BiBot(config=load_config())
     
     if args.cleanup:
         bot.cleanup_all_positions()
@@ -39,6 +40,5 @@ def main():
         sys.exit(0)
     
     bot.run()
-
 if __name__ == "__main__":
     main()

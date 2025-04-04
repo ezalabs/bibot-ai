@@ -1,5 +1,5 @@
 import logging
-from app.config import load_config
+from app.config.settings import load_config
 
 def get_logger(name=None):
     """Configure and return a logger"""

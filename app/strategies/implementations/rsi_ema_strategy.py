@@ -1,7 +1,9 @@
+import pandas as pd
 import ta
-from app.config import load_config
-from app.core.strategies.strategy_base import TradingStrategy
-from app.utils.logger import get_logger
+from app.config.settings import load_config, BiBotConfig
+from app.models.strategy import TradingResult, TradingSignals
+from app.strategies.strategy_base import TradingStrategy
+from app.utils.logging.logger import get_logger
 
 # Configure logging
 logger = get_logger()
@@ -17,21 +19,21 @@ class RsiEmaStrategy(TradingStrategy):
         Initialize the RSI-EMA strategy.
         """
         super().__init__()
-        # Load config using the Pydantic model
-        self.config = load_config()
+        # Load config
+        self.config: BiBotConfig = load_config()
         logger.info(f"Initializing {self.get_name()} with RSI({self.config.rsi_ema.rsi_period}) "
                     f"and EMA({self.config.rsi_ema.ema_fast}/{self.config.rsi_ema.ema_slow})")
     
-    def generate_trading_signals(self, df):
+    def generate_trading_signals(self, df: pd.DataFrame) -> TradingResult:
         """
         Generate trading signals based on RSI and EMA indicators.
         
         Args:
-            df (pandas.DataFrame): Raw historical price data
+            df: Raw historical price data
             
         Returns:
-            dict: Dictionary with 'data' (DataFrame with indicators) and
-                  'signals' (dict with 'long' and 'short' entry signals)
+            Dictionary with 'data' (DataFrame with indicators) and
+            'signals' (dict with 'long' and 'short' entry signals)
         """
         logger.debug("Generating trading signals using RSI-EMA strategy")
         
@@ -76,17 +78,17 @@ class RsiEmaStrategy(TradingStrategy):
             logger.debug(f"EMA Crossover - Up: {ema_cross_up}, Down: {ema_cross_down}")
             
             # Generate signals
-            signals = {
-                'long': rsi_oversold and ema_cross_up,
-                'short': rsi_overbought and ema_cross_down
-            }
+            signals = TradingSignals(
+                long=rsi_oversold and ema_cross_up,
+                short=rsi_overbought and ema_cross_down
+            )
             
             logger.debug(f"Entry signals - Long: {signals['long']}, Short: {signals['short']}")
             
-            return {
-                'data': df,
-                'signals': signals
-            }
+            return TradingResult(
+                data=df,
+                signals=signals
+            )
             
         except Exception as e:
             logger.error(f"Error generating trading signals: {e}")

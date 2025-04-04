@@ -1,54 +1,16 @@
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, model_validator
 import os
-from typing import Optional, Literal, Union
+from typing import Optional
 from dotenv import load_dotenv
+import logging
+
+from app.models.config import BinanceCredentials, LoggingConfig, RsiEmaConfig, TradingConfig
 
 # Load environment variables
 load_dotenv()
 
-class BinanceCredentials(BaseModel):
-    """Binance API credentials configuration"""
-    api_key: str
-    api_secret: str
-    
-    @field_validator('api_key', 'api_secret')
-    @classmethod
-    def validate_credentials(cls, v):
-        if not v:
-            raise ValueError("API credentials cannot be empty")
-        return v
-
-class TradingConfig(BaseModel):
-    """Trading parameters configuration"""
-    trading_pair: str = Field(default="BTCUSDT", description="Trading pair symbol")
-    position_size: float = Field(default=0.01, gt=0, description="Position size in base asset")
-    leverage: int = Field(default=5, gt=0, le=125, description="Leverage for futures trading")
-    take_profit_percentage: float = Field(default=0.1, gt=0, description="Take profit percentage")
-    stop_loss_percentage: float = Field(default=0.05, gt=0, description="Stop loss percentage")
-    max_positions: int = Field(default=3, ge=1, description="Maximum number of concurrent positions")
-    use_testnet: bool = Field(default=True, description="Whether to use Binance testnet")
-
-class RsiEmaConfig(BaseModel):
-    """RSI and EMA strategy specific configuration"""
-    rsi_period: int = Field(default=14, gt=0, description="RSI indicator period")
-    rsi_overbought: float = Field(default=70.0, ge=50.0, le=100.0, description="RSI overbought threshold")
-    rsi_oversold: float = Field(default=30.0, ge=0.0, le=50.0, description="RSI oversold threshold")
-    ema_fast: int = Field(default=9, gt=0, description="Fast EMA period")
-    ema_slow: int = Field(default=21, gt=0, description="Slow EMA period")
-    
-    @field_validator('ema_slow')
-    @classmethod
-    def validate_ema_relationship(cls, v, info):
-        if 'ema_fast' in info.data and v <= info.data['ema_fast']:
-            raise ValueError(f"Slow EMA period ({v}) must be greater than fast EMA period ({info.data['ema_fast']})")
-        return v
-
-class LoggingConfig(BaseModel):
-    """Logging configuration"""
-    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
-        default="INFO", 
-        description="Logging level"
-    )
+# Create a logger for this module
+logger = logging.getLogger(__name__)
 
 class BiBotConfig(BaseModel):
     """Main configuration for the trading bot"""
@@ -98,9 +60,13 @@ class BiBotConfig(BaseModel):
         }
         return structured
 
+# Cache the config object
+_config_cache: Optional[BiBotConfig] = None
+
 def load_config() -> BiBotConfig:
     """
     Load configuration from environment variables and validate using Pydantic.
+    Caches the configuration to avoid multiple loading.
     
     Returns:
         BiBotConfig: Validated configuration object
@@ -108,10 +74,19 @@ def load_config() -> BiBotConfig:
     Raises:
         ValidationError: If the configuration is invalid
     """
+    global _config_cache
+    
+    # Return cached config if available
+    if _config_cache is not None:
+        return _config_cache
+    
     try:
         config = BiBotConfig()
-        print(f"Configuration loaded successfully with trading pair: {config.trading.trading_pair}")
+        logger.debug(f"Configuration loaded with trading pair: {config.trading.trading_pair}")
+        
+        # Cache the config
+        _config_cache = config
         return config
     except Exception as e:
-        print(f"Error loading configuration: {e}")
+        logger.error(f"Error loading configuration: {e}")
         raise

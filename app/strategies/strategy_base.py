@@ -1,4 +1,8 @@
 from abc import ABC, abstractmethod
+import pandas as pd
+
+from app.models.strategy import TradingResult
+
 
 class TradingStrategy(ABC):
     """
@@ -14,25 +18,25 @@ class TradingStrategy(ABC):
         pass
     
     @abstractmethod
-    def generate_trading_signals(self, df):
+    def generate_trading_signals(self, df: pd.DataFrame) -> TradingResult:
         """
         Process historical data and generate trading signals.
         
         Args:
-            df (pandas.DataFrame): Raw historical price/volume data
+            df: Raw historical price/volume data
             
         Returns:
-            dict: A dictionary containing:
-                 - 'data': The DataFrame with added indicators (optional)
-                 - 'signals': A dictionary with at least 'long' and 'short' boolean keys
+            A dictionary containing:
+                - 'data': The DataFrame with added indicators
+                - 'signals': A dictionary with 'long' and 'short' boolean keys
         """
         pass
     
-    def get_name(self):
+    def get_name(self) -> str:
         """
         Get the name of the strategy.
         
         Returns:
-            str: The name of the strategy
+            The name of the strategy
         """
         return self.__class__.__name__

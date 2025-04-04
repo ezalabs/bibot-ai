@@ -148,136 +148,228 @@ Once the bot is running, it will:
 
 ## Implementing Custom Trading Strategies
 
-BiBot is designed with an extensible architecture that allows you to easily implement custom trading strategies. By creating new classes that inherit from the base `TradingStrategy` class, you can define your own trading logic while reusing the core bot infrastructure.
+BiBot is designed with an extensible architecture that allows you to easily implement custom trading strategies. The bot uses a strategy factory pattern along with type-safe Pydantic models for configuration.
 
 ### Strategy Architecture
 
-The core of BiBot's strategy system is the `TradingStrategy` abstract base class:
+The strategy system consists of three main components:
+
+1. The `TradingStrategy` abstract base class defining the interface
+2. A `StrategyFactory` responsible for creating and registering strategies
+3. Individual strategy implementations (e.g., `RsiEmaStrategy`)
+
+The core interface is defined in `app/strategies/strategy_base.py`:
 
 ```python
 from abc import ABC, abstractmethod
+from typing import TypedDict, Dict, Any
+
+class TradingSignals(TypedDict):
+    """Trading signals returned by strategies"""
+    long: bool
+    short: bool
+
+class TradingResult(TypedDict):
+    """Result returned by trading strategies"""
+    data: Any  # Processed data with indicators
+    signals: TradingSignals
 
 class TradingStrategy(ABC):
+    """Abstract base class for all trading strategies"""
+    
     @abstractmethod
-    def generate_trading_signals(self, df):
+    def generate_trading_signals(self, df) -> TradingResult:
         """
         Process historical data and generate trading signals.
         
         Args:
-            df (pandas.DataFrame): Raw historical price/volume data
+            df: Historical price/volume data as DataFrame
             
         Returns:
-            dict: A dictionary containing:
-                 - 'data': The DataFrame with added indicators (optional)
-                 - 'signals': A dictionary with at least 'long' and 'short' boolean keys
+            TradingResult containing processed data and signals
         """
         pass
+    
+    def get_name(self) -> str:
+        """Get the name of the strategy"""
+        return self.__class__.__name__
 ```
 
 ### Creating a Custom Strategy
 
 To implement your own strategy:
 
-1. Create a new Python file in the `app/strategies` directory
+1. Create a new Python file in the `app/strategies/implementations` directory
 2. Define a class that inherits from `TradingStrategy`
 3. Implement the `generate_trading_signals` method
-4. Return a dictionary with your trading signals
+4. Register your strategy with the factory
 
 Here's an example of a simple Moving Average Crossover strategy:
 
 ```python
+import pandas as pd
 import ta
-import app.utils.logging
-from app.strategies.strategy_base import TradingStrategy
+from app.strategies.strategy_base import TradingStrategy, TradingResult
+from app.config.settings import BiBotConfig, load_config
+from app.utils.logging.logger import get_logger
 
 logger = get_logger()
 
 class MaCrossStrategy(TradingStrategy):
-    def __init__(self):
-        super().__init__()
-        self.short_window = 10
-        self.long_window = 50
+    """Moving Average Crossover Strategy"""
+    
+    def __init__(self, config: BiBotConfig = None):
+        """
+        Initialize the MA Crossover strategy
+        
+        Args:
+            config: Application configuration
+        """
+        self.config = config or load_config()
+        self.short_window = 10  # Could be added to config
+        self.long_window = 50   # Could be added to config
         logger.info(f"Initializing {self.get_name()} with MA({self.short_window}/{self.long_window})")
     
-    def generate_trading_signals(self, df):
-        """Generate trading signals based on Moving Average crossovers"""
-        logger.debug("Generating signals using MA Cross strategy")
+    def generate_trading_signals(self, df: pd.DataFrame) -> TradingResult:
+        """
+        Generate trading signals based on Moving Average crossovers
+        
+        Args:
+            df: Historical price data
+            
+        Returns:
+            TradingResult with signals
+        """
+        logger.debug("Generating trading signals using MA Cross strategy")
         
         # Calculate moving averages
         df['short_ma'] = ta.trend.SMAIndicator(df['close'], window=self.short_window).sma_indicator()
         df['long_ma'] = ta.trend.SMAIndicator(df['close'], window=self.long_window).sma_indicator()
         
-        # Calculate crossover events
+        # Calculate crossover events (current period vs previous period)
         ma_cross_up = (df['short_ma'].iloc[-1] > df['long_ma'].iloc[-1] and
                       df['short_ma'].iloc[-2] <= df['long_ma'].iloc[-2])
         
         ma_cross_down = (df['short_ma'].iloc[-1] < df['long_ma'].iloc[-1] and
                         df['short_ma'].iloc[-2] >= df['long_ma'].iloc[-2])
         
+        # Log current state
+        logger.debug(f"Current MAs - Fast: {df['short_ma'].iloc[-1]:.2f}, Slow: {df['long_ma'].iloc[-1]:.2f}")
+        logger.debug(f"MA Crossover - Up: {ma_cross_up}, Down: {ma_cross_down}")
+        
         # Generate signals
-        signals = {
+        signals = TradingSignals(
             'long': ma_cross_up,
             'short': ma_cross_down
-        }
+        )
         
-        return {
+        logger.debug(f"Entry signals - Long: {signals['long']}, Short: {signals['short']}")
+        
+        return TradingResult(
             'data': df,
             'signals': signals
-        }
+        )
+```
+
+### Registering Your Strategy
+
+To make your strategy available to the factory, add it to the `app/strategies/__init__.py` file:
+
+```python
+from app.strategies.strategy_base import TradingStrategy, TradingResult, TradingSignals
+from app.strategies.implementations.rsi_ema_strategy import RsiEmaStrategy
+from app.strategies.implementations.ma_cross_strategy import MaCrossStrategy
+from app.strategies.factory import StrategyFactory
+
+# Register all available strategies
+StrategyFactory.register_strategy("RSI_EMA", RsiEmaStrategy)
+StrategyFactory.register_strategy("MA_CROSS", MaCrossStrategy)
+
+# Export classes for easier imports
+__all__ = [
+    "TradingStrategy", 
+    "TradingResult", 
+    "TradingSignals",
+    "RsiEmaStrategy", 
+    "MaCrossStrategy", 
+    "StrategyFactory"
+]
 ```
 
 ### Using Your Custom Strategy
 
-To use your custom strategy with BiBot, you'll need to update the bot initialization in `app/bibot.py`:
+To use your custom strategy with BiBot, you can either specify it in your environment configuration or pass it directly to the BiBot constructor:
 
 ```python
-# Import your strategy
-from app.strategies.my_custom_strategy import MyCustomStrategy
+# In .env file
+STRATEGY=MA_CROSS
 
-class BiBot:
-    def __init__(self):
-        # ... existing initialization code ...
-        
-        # Initialize with your custom strategy
-        self.strategy = MyCustomStrategy()
-        logger.info(f"Using trading strategy: {self.strategy.get_name()}")
-        
-        # ... rest of initialization ...
+# Or when creating the BiBot instance directly
+from app.core.bibot import BiBot
+from app.config.settings import load_config
+
+config = load_config()
+config.strategy = "MA_CROSS"  # Override strategy
+bot = BiBot(config=config)
+```
+
+The BiBot class automatically uses the StrategyFactory to create the right strategy:
+
+```python
+# Simplified from app/core/bibot.py
+self.strategy = StrategyFactory.create_strategy(config=self.config)
+logger.info(f"Using trading strategy: {self.strategy.get_name()}")
 ```
 
 ### Strategy Selection
 
-For more advanced usage, you can implement strategy selection based on configuration:
+The StrategyFactory handles strategy creation and selection based on your configuration:
 
 ```python
-# In config.py
-STRATEGY = os.getenv('STRATEGY') or 'RsiEma'  # Default strategy
+# app/strategies/factory.py
+from typing import Dict, Type, Optional
+from app.strategies.strategy_base import TradingStrategy
+from app.config.settings import BiBotConfig, load_config
 
-# In bibot.py
-from app.strategies.rsi_ema_strategy import RsiEmaStrategy
-from app.strategies.ma_cross_strategy import MaCrossStrategy
-# Import other strategies
-
-STRATEGIES = {
-    'RSI_EMA': RsiEmaStrategy,
-    'MA_CROSS': MaCrossStrategy,
-    # Add more strategies here
-}
-
-class BiBot:
-    def __init__(self):
-        # ... existing initialization code ...
+class StrategyFactory:
+    """Factory for creating trading strategy instances"""
+    
+    # Registry of available strategies
+    _strategies: Dict[str, Type[TradingStrategy]] = {}
+    
+    @classmethod
+    def register_strategy(cls, name: str, strategy_class: Type[TradingStrategy]) -> None:
+        """
+        Register a strategy with the factory
         
-        # Select strategy based on configuration
-        strategy_class = STRATEGIES.get(config.STRATEGY)
+        Args:
+            name: Name identifier for the strategy
+            strategy_class: Strategy class to register
+        """
+        cls._strategies[name] = strategy_class
+    
+    @classmethod
+    def create_strategy(cls, name: Optional[str] = None, config: Optional[BiBotConfig] = None) -> TradingStrategy:
+        """
+        Create a strategy instance
+        
+        Args:
+            name: Optional name of strategy to create (defaults to config.strategy)
+            config: Optional configuration to pass to strategy
+            
+        Returns:
+            Instantiated strategy
+        """
+        config = config or load_config()
+        name = name or config.strategy
+        
+        strategy_class = cls._strategies.get(name)
         if not strategy_class:
-            logger.warning(f"Strategy {config.STRATEGY} not found, using RsiEmaStrategy")
-            strategy_class = RsiEmaStrategy
+            # Fallback to default if strategy not found
+            fallback = next(iter(cls._strategies.values()))
+            return fallback(config=config)
         
-        self.strategy = strategy_class()
-        logger.info(f"Using trading strategy: {self.strategy.get_name()}")
-        
-        # ... rest of initialization ...
+        return strategy_class(config=config)
 ```
 
 Then you can set the strategy in your `.env` file:
@@ -288,13 +380,14 @@ STRATEGY=MA_CROSS
 
 ### Best Practices for Custom Strategies
 
-1. **Logging**: Use the logger to provide informative debug messages about your strategy's decisions.
-2. **Error Handling**: Implement proper error handling within your strategy.
-3. **Configuration**: Consider using environment variables for strategy parameters.
-4. **Documentation**: Document your strategy's logic, indicators, and signals.
-5. **Testing**: Test your strategy with historical data before using it live.
+1. **Type Safety**: Use type hints and Pydantic models for better code quality
+2. **Configuration**: Load parameters from the centralized Pydantic-based config
+3. **Logging**: Use the logger to provide informative debug messages about your strategy's decisions
+4. **Error Handling**: Implement proper error handling within your strategy
+5. **Testing**: Write unit tests for your strategy logic
+6. **Documentation**: Add docstrings to your strategy class and methods
 
-By following this pattern, you can create and experiment with various trading strategies while keeping the core trading infrastructure intact.
+By following this pattern, you can create and experiment with various trading strategies while keeping the core trading infrastructure intact and type-safe.
 
 ## Contributing
 Feel free to contribute to the project by submitting issues or pull requests.
