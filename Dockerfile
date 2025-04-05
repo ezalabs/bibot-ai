@@ -15,9 +15,11 @@ RUN curl -sSL https://install.python-poetry.org | python3 -
 # Add Poetry to PATH
 ENV PATH="/root/.local/bin:$PATH"
 
-# Copy poetry files
+# Copy project files needed for installation
 COPY pyproject.toml ./
 COPY poetry.lock* ./
+COPY README.md ./
+COPY app ./app
 
 # Configure Poetry to not create a virtual environment inside the container
 RUN poetry config virtualenvs.create false
@@ -25,7 +27,7 @@ RUN poetry config virtualenvs.create false
 # Install dependencies
 RUN poetry install --no-interaction --no-ansi
 
-# Copy the rest of the application
+# Copy the rest of the application (config files, etc.)
 COPY . .
 
 # Set environment variables
