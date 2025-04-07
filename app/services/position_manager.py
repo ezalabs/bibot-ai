@@ -1,4 +1,5 @@
 from typing import List
+from datetime import datetime
 
 from app.config.settings import BiBotConfig
 from app.models.position import Position
@@ -68,14 +69,24 @@ class PositionManager:
     
     def _save_positions(self) -> None:
         """Save positions to cache"""
-        # Convert to dict for serialization
-        position_data = [p.model_dump() for p in self.active_positions]
-        result = self.cache.save(position_data)
-        
-        if result:
-            logger.debug(f"Saved {len(self.active_positions)} positions to cache")
-        else:
-            logger.warning("Failed to save positions to cache")
+        try:
+            # Convert to dict for serialization, handling datetime
+            position_data = []
+            for p in self.active_positions:
+                pos_dict = p.model_dump()
+                # Convert datetime to string for JSON serialization
+                if isinstance(pos_dict['timestamp'], datetime):
+                    pos_dict['timestamp'] = pos_dict['timestamp'].isoformat()
+                position_data.append(pos_dict)
+            
+            result = self.cache.save(position_data)
+            
+            if result:
+                logger.debug(f"Saved {len(self.active_positions)} positions to cache")
+            else:
+                logger.warning("Failed to save positions to cache")
+        except Exception as e:
+            logger.error(f"Error saving positions: {e}")
     
     def check_closed_positions(self) -> None:
         """Check for positions that have been closed and clean up"""

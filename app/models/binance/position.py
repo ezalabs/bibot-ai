@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 from pydantic import BaseModel
 
 
@@ -10,8 +10,8 @@ class BinancePosition(BaseModel):
     markPrice: str
     unRealizedProfit: str
     liquidationPrice: str
-    leverage: str
-    marginType: str
+    leverage: Optional[str] = "1"  # Making this optional with a default
+    marginType: Optional[str] = ""  # Making this optional with a default
     isolatedMargin: str
     positionSide: str
     
