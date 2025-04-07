@@ -1,5 +1,6 @@
 from typing import List
 from datetime import datetime
+import json
 
 from app.config.settings import BiBotConfig
 from app.models.position import Position
@@ -42,30 +43,40 @@ class PositionManager:
     
     def load_positions(self) -> None:
         """Load positions from cache"""
-        cached_data = self.cache.load()
-        if not cached_data:
-            logger.info("No cached positions found")
-            return
-        
-        if not isinstance(cached_data, list):
-            logger.warning("Invalid position cache format")
-            return
-        
-        valid_positions: List[Position] = []
-        for position_data in cached_data:
-            try:
-                # Convert dictionary to Position model
-                position = Position.model_validate(position_data)
-                valid_positions.append(position)
-            except Exception as e:
-                logger.warning(f"Skipped invalid position: {e}")
-        
-        self.active_positions = valid_positions
-        logger.info(f"Loaded {len(valid_positions)} positions from cache")
-        
-        # Verify positions are still valid
-        if valid_positions:
-            self.check_closed_positions()
+        try:
+            cached_data = self.cache.load()
+            if not cached_data:
+                logger.info("No cached positions found")
+                return
+            
+            if not isinstance(cached_data, list):
+                logger.warning("Invalid position cache format - expected list")
+                return
+            
+            valid_positions: List[Position] = []
+            for position_data in cached_data:
+                try:
+                    # Convert dictionary to Position model
+                    position = Position.model_validate(position_data)
+                    valid_positions.append(position)
+                except Exception as e:
+                    logger.warning(f"Skipped invalid position: {e}")
+            
+            self.active_positions = valid_positions
+            logger.info(f"Loaded {len(valid_positions)} positions from cache")
+            
+            # Verify positions are still valid
+            if valid_positions:
+                self.check_closed_positions()
+                
+        except json.JSONDecodeError as e:
+            logger.error(f"Error parsing position cache: {e}")
+            logger.info("Clearing invalid position cache")
+            self.clear_cache()
+        except Exception as e:
+            logger.error(f"Unexpected error loading positions: {e}")
+            logger.info("Clearing position cache due to error")
+            self.clear_cache()
     
     def _save_positions(self) -> None:
         """Save positions to cache"""
