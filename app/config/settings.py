@@ -48,8 +48,8 @@ class BiBotConfig(BaseModel):
             },
             'rsi_ema': {
                 'rsi_period': int(values.get('rsi_period', os.getenv('RSI_PERIOD', 14))),
-                'rsi_overbought': float(values.get('rsi_overbought', os.getenv('RSI_OVERBOUGHT', 70))),
-                'rsi_oversold': float(values.get('rsi_oversold', os.getenv('RSI_OVERSOLD', 30))),
+                'rsi_overbought': float(values.get('rsi_overbought', os.getenv('RSI_OVERBOUGHT', 60))),
+                'rsi_oversold': float(values.get('rsi_oversold', os.getenv('RSI_OVERSOLD', 40))),
                 'ema_fast': int(values.get('ema_fast', os.getenv('EMA_FAST', 9))),
                 'ema_slow': int(values.get('ema_slow', os.getenv('EMA_SLOW', 21))),
             },
