@@ -26,8 +26,8 @@ class TradingConfig(BaseModel):
 class RsiEmaConfig(BaseModel):
     """RSI and EMA strategy specific configuration"""
     rsi_period: int = Field(default=14, gt=0, description="RSI indicator period")
-    rsi_overbought: float = Field(default=70.0, ge=50.0, le=100.0, description="RSI overbought threshold")
-    rsi_oversold: float = Field(default=30.0, ge=0.0, le=50.0, description="RSI oversold threshold")
+    rsi_overbought: float = Field(default=60.0, ge=50.0, le=100.0, description="RSI overbought threshold")
+    rsi_oversold: float = Field(default=40.0, ge=0.0, le=50.0, description="RSI oversold threshold")
     ema_fast: int = Field(default=9, gt=0, description="Fast EMA period")
     ema_slow: int = Field(default=21, gt=0, description="Slow EMA period")
     

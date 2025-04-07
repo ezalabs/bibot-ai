@@ -102,8 +102,8 @@ MAX_POSITIONS=3               # Default: 3
 
 # Technical analysis parameters
 RSI_PERIOD=14                 # Default: 14
-RSI_OVERBOUGHT=70             # Default: 70
-RSI_OVERSOLD=30               # Default: 30
+RSI_OVERBOUGHT=70             # Default: 60
+RSI_OVERSOLD=30               # Default: 40
 EMA_FAST=9                    # Default: 9
 EMA_SLOW=21                   # Default: 21
 
