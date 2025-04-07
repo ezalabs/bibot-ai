@@ -76,7 +76,7 @@ class BiBot:
                         self.config.trading.position_size
                     )
                     if position:
-                        self.position_manager.track_position(position)
+                        self.position_manager.add_position(position)
                         logger.info(f"Long position opened at {position.entry_price}")
                 
                 elif signals['short']:
@@ -85,12 +85,23 @@ class BiBot:
                         self.config.trading.position_size
                     )
                     if position:
-                        self.position_manager.track_position(position)
+                        self.position_manager.add_position(position)
                         logger.info(f"Short position opened at {position.entry_price}")
                 
-                time.sleep(1)
+                # Sleep before next check
+                time.sleep(5)
                 
             except Exception as e:
                 logger.error(f"Error in main loop: {e}")
-                logger.info("Waiting 60 seconds before retrying...")
-                time.sleep(60)
+                time.sleep(30)
+    
+    def cleanup_all_positions(self) -> None:
+        """Clean up all tracked positions"""
+        logger.info("Cleaning up all positions...")
+        
+        # Loop through all positions and clean them up
+        positions = self.position_manager.active_positions.copy()
+        for position in positions:
+            self.position_manager.cleanup_position(position)
+        
+        logger.info("Position cleanup completed")

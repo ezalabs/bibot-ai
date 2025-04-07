@@ -16,5 +16,8 @@ def get_logger(name=None):
         # Set log level from config
         log_level = getattr(logging, config.logging.log_level)
         logger.setLevel(log_level)
+        
+        # Prevent propagation to avoid duplicate log messages
+        logger.propagate = False
     
     return logger
