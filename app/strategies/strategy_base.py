@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
-import pandas as pd
+from typing import List
 
 from app.models.strategy import TradingResult
+from app.utils.binance.client import KlineData
 
 
 class TradingStrategy(ABC):
@@ -18,16 +19,16 @@ class TradingStrategy(ABC):
         pass
     
     @abstractmethod
-    def generate_trading_signals(self, df: pd.DataFrame) -> TradingResult:
+    def generate_trading_signals(self, klines: List[KlineData]) -> TradingResult:
         """
         Process historical data and generate trading signals.
         
         Args:
-            df: Raw historical price/volume data
+            klines: List of KlineData objects containing historical price/volume data
             
         Returns:
             A dictionary containing:
-                - 'data': The DataFrame with added indicators
+                - 'data': The processed data with indicators
                 - 'signals': A dictionary with 'long' and 'short' boolean keys
         """
         pass

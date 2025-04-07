@@ -10,7 +10,7 @@ from app.config.settings import BiBotConfig
 from app.models.binance import BinanceOrder, BinancePosition
 from app.utils.logging.logger import get_logger
 
-logger = get_logger()
+logger = get_logger(__name__)
 
 # Type for the decorator's return function
 T = TypeVar('T')

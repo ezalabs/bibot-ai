@@ -7,7 +7,7 @@ from app.utils.logging.logger import get_logger
 from app.core.bibot import BiBot
 
 # Configure logging
-logger = get_logger()
+logger = get_logger(__name__)
 
 # Create a global bot variable
 bot = None

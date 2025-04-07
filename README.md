@@ -1,7 +1,6 @@
-# BiBot - Python-based Trading Bot for Binance Futures
+# BiBot - Python Trading Bot for Binance Futures
 
-## Overview
-BiBot is a Python-based trading bot designed for Binance Futures that implements scalping strategies.
+A Python-based trading bot for Binance Futures that implements various trading strategies.
 
 ## Features
 - Automated trading using RSI and EMA crossover strategy [Default]
@@ -162,37 +161,74 @@ The core interface is defined in `app/strategies/strategy_base.py`:
 
 ```python
 from abc import ABC, abstractmethod
-from typing import TypedDict, Dict, Any
+from typing import List, Dict, Any
 
-class TradingSignals(TypedDict):
-    """Trading signals returned by strategies"""
-    long: bool
-    short: bool
-
-class TradingResult(TypedDict):
-    """Result returned by trading strategies"""
-    data: Any  # Processed data with indicators
-    signals: TradingSignals
+from app.models.strategy import TradingResult
+from app.utils.binance.client import KlineData
 
 class TradingStrategy(ABC):
     """Abstract base class for all trading strategies"""
     
     @abstractmethod
-    def generate_trading_signals(self, df) -> TradingResult:
+    def generate_trading_signals(self, klines: List[KlineData]) -> TradingResult:
         """
         Process historical data and generate trading signals.
         
         Args:
-            df: Historical price/volume data as DataFrame
+            klines: List of KlineData objects containing historical price/volume data
             
         Returns:
-            TradingResult containing processed data and signals
+            A dictionary containing:
+                - 'data': The processed data with indicators
+                - 'signals': A dictionary with 'long' and 'short' boolean keys
         """
         pass
     
     def get_name(self) -> str:
         """Get the name of the strategy"""
         return self.__class__.__name__
+```
+
+### Data Conversion Utility
+
+BiBot provides a utility function for converting Binance `KlineData` to pandas DataFrames, which makes it easier to perform technical analysis. This utility is available at `app/utils/data_converter.py`:
+
+```python
+from typing import List
+import pandas as pd
+
+from app.utils.binance.client import KlineData
+
+def convert_klines_to_dataframe(klines: List[KlineData]) -> pd.DataFrame:
+    """
+    Convert a list of KlineData objects to a pandas DataFrame for technical analysis.
+    
+    Args:
+        klines: List of KlineData objects containing historical price/volume data
+        
+    Returns:
+        DataFrame with properly formatted columns and datetime index
+    """
+    # Create DataFrame from KlineData list
+    df = pd.DataFrame([{
+        'timestamp': k['timestamp'],
+        'open': k['open'],
+        'high': k['high'],
+        'low': k['low'],
+        'close': k['close'],
+        'volume': k['volume'],
+        'quote_volume': k['quote_volume'],
+        'trades': k['trades'],
+        'taker_buy_base': k['taker_buy_base'],
+        'taker_buy_quote': k['taker_buy_quote']
+    } for k in klines])
+    
+    # Convert timestamp to datetime and set as index
+    df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df.set_index('datetime', inplace=True)
+    df.sort_index(inplace=True)
+    
+    return df
 ```
 
 ### Creating a Custom Strategy
@@ -207,10 +243,13 @@ To implement your own strategy:
 Here's an example of a simple Moving Average Crossover strategy:
 
 ```python
+from typing import List
 import pandas as pd
-import ta
-from app.strategies.strategy_base import TradingStrategy, TradingResult
-from app.config.settings import BiBotConfig, load_config
+from ta.trend import SMAIndicator
+
+from app.strategies.strategy_base import TradingStrategy
+from app.utils.binance.client import KlineData
+from app.utils.data_converter import convert_klines_to_dataframe
 from app.utils.logging.logger import get_logger
 
 logger = get_logger()
@@ -218,57 +257,61 @@ logger = get_logger()
 class MaCrossStrategy(TradingStrategy):
     """Moving Average Crossover Strategy"""
     
-    def __init__(self, config: BiBotConfig = None):
+    def __init__(self, config):
         """
         Initialize the MA Crossover strategy
         
         Args:
             config: Application configuration
         """
-        self.config = config or load_config()
-        self.short_window = 10  # Could be added to config
-        self.long_window = 50   # Could be added to config
+        self.config = config
+        self.short_window = 10
+        self.long_window = 50
         logger.info(f"Initializing {self.get_name()} with MA({self.short_window}/{self.long_window})")
     
-    def generate_trading_signals(self, df: pd.DataFrame) -> TradingResult:
+    def generate_trading_signals(self, klines: List[KlineData]) -> dict:
         """
         Generate trading signals based on Moving Average crossovers
         
         Args:
-            df: Historical price data
+            klines: List of KlineData objects containing historical price data
             
         Returns:
-            TradingResult with signals
+            Dictionary containing:
+                - 'data': DataFrame with indicators
+                - 'signals': Dictionary with 'long' and 'short' boolean keys
         """
-        logger.debug("Generating trading signals using MA Cross strategy")
+        # Convert klines to DataFrame for technical analysis
+        df = convert_klines_to_dataframe(klines)
         
         # Calculate moving averages
-        df['short_ma'] = ta.trend.SMAIndicator(df['close'], window=self.short_window).sma_indicator()
-        df['long_ma'] = ta.trend.SMAIndicator(df['close'], window=self.long_window).sma_indicator()
-        
-        # Calculate crossover events (current period vs previous period)
-        ma_cross_up = (df['short_ma'].iloc[-1] > df['long_ma'].iloc[-1] and
-                      df['short_ma'].iloc[-2] <= df['long_ma'].iloc[-2])
-        
-        ma_cross_down = (df['short_ma'].iloc[-1] < df['long_ma'].iloc[-1] and
-                        df['short_ma'].iloc[-2] >= df['long_ma'].iloc[-2])
-        
-        # Log current state
-        logger.debug(f"Current MAs - Fast: {df['short_ma'].iloc[-1]:.2f}, Slow: {df['long_ma'].iloc[-1]:.2f}")
-        logger.debug(f"MA Crossover - Up: {ma_cross_up}, Down: {ma_cross_down}")
+        df['short_ma'] = SMAIndicator(df['close'], window=self.short_window).sma_indicator()
+        df['long_ma'] = SMAIndicator(df['close'], window=self.long_window).sma_indicator()
         
         # Generate signals
-        signals = TradingSignals(
-            'long': ma_cross_up,
-            'short': ma_cross_down
-        )
+        df['long_signal'] = (df['short_ma'] > df['long_ma']) & (df['short_ma'].shift(1) <= df['long_ma'].shift(1))
+        df['short_signal'] = (df['short_ma'] < df['long_ma']) & (df['short_ma'].shift(1) >= df['long_ma'].shift(1))
         
-        logger.debug(f"Entry signals - Long: {signals['long']}, Short: {signals['short']}")
+        # Get the latest signal
+        latest_signal = {
+            'long': bool(df['long_signal'].iloc[-1]),
+            'short': bool(df['short_signal'].iloc[-1])
+        }
         
-        return TradingResult(
+        logger.debug(f"Latest MA Fast: {df['short_ma'].iloc[-1]:.2f}")
+        logger.debug(f"Latest MA Slow: {df['long_ma'].iloc[-1]:.2f}")
+        logger.debug(f"Trading signals: {latest_signal}")
+        
+        return {
             'data': df,
-            'signals': signals
-        )
+            'signals': latest_signal
+        }
+```
+
+Then you can set the strategy in your `.env` file:
+
+```plaintext
+STRATEGY=MA_CROSS
 ```
 
 ### Registering Your Strategy
@@ -386,6 +429,7 @@ STRATEGY=MA_CROSS
 4. **Error Handling**: Implement proper error handling within your strategy
 5. **Testing**: Write unit tests for your strategy logic
 6. **Documentation**: Add docstrings to your strategy class and methods
+7. **Data Conversion**: Use the provided `convert_klines_to_dataframe` utility for consistent handling of market data
 
 By following this pattern, you can create and experiment with various trading strategies while keeping the core trading infrastructure intact and type-safe.
 

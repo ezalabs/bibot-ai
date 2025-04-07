@@ -1,95 +1,86 @@
+from typing import List
 import pandas as pd
-import ta
-from app.config.settings import load_config, BiBotConfig
-from app.models.strategy import TradingResult, TradingSignals
+from ta.momentum import RSIIndicator
+from ta.trend import EMAIndicator
+
+from app.config.settings import BiBotConfig
 from app.strategies.strategy_base import TradingStrategy
+from app.utils.binance.client import KlineData
+from app.utils.data_converter import convert_klines_to_dataframe
 from app.utils.logging.logger import get_logger
 
-# Configure logging
-logger = get_logger()
+logger = get_logger(__name__)
+
 
 class RsiEmaStrategy(TradingStrategy):
     """
-    Trading strategy based on RSI overbought/oversold conditions
-    combined with EMA crossovers.
+    RSI + EMA Crossover Strategy
     """
-    
-    def __init__(self):
+
+    def __init__(self, config: BiBotConfig):
         """
-        Initialize the RSI-EMA strategy.
-        """
-        super().__init__()
-        # Load config
-        self.config: BiBotConfig = load_config()
-        logger.info(f"Initializing {self.get_name()} with RSI({self.config.rsi_ema.rsi_period}) "
-                    f"and EMA({self.config.rsi_ema.ema_fast}/{self.config.rsi_ema.ema_slow})")
-    
-    def generate_trading_signals(self, df: pd.DataFrame) -> TradingResult:
-        """
-        Generate trading signals based on RSI and EMA indicators.
-        
+        Initialize the strategy with configuration parameters
+
         Args:
-            df: Raw historical price data
-            
-        Returns:
-            Dictionary with 'data' (DataFrame with indicators) and
-            'signals' (dict with 'long' and 'short' entry signals)
+            config: Strategy configuration object
         """
-        logger.debug("Generating trading signals using RSI-EMA strategy")
-        
-        try:
-            # Calculate RSI
-            df['rsi'] = ta.momentum.RSIIndicator(
-                df['close'], 
-                window=self.config.rsi_ema.rsi_period
-            ).rsi()
-            logger.debug(f"Current RSI: {df['rsi'].iloc[-1]:.2f}")
-            
-            # Calculate EMAs
-            df['ema_fast'] = ta.trend.EMAIndicator(
-                df['close'], 
-                window=self.config.rsi_ema.ema_fast
-            ).ema_indicator()
-            
-            df['ema_slow'] = ta.trend.EMAIndicator(
-                df['close'], 
-                window=self.config.rsi_ema.ema_slow
-            ).ema_indicator()
-            
-            logger.debug(f"Current EMAs - Fast: {df['ema_fast'].iloc[-1]:.2f}, "
-                         f"Slow: {df['ema_slow'].iloc[-1]:.2f}")
-            
-            # Check entry conditions
-            last_row = df.iloc[-1]
-            
-            # RSI conditions
-            rsi_oversold = last_row['rsi'] < self.config.rsi_ema.rsi_oversold
-            rsi_overbought = last_row['rsi'] > self.config.rsi_ema.rsi_overbought
-            
-            # EMA crossover
-            ema_cross_up = (df['ema_fast'].iloc[-1] > df['ema_slow'].iloc[-1] and
-                           df['ema_fast'].iloc[-2] <= df['ema_slow'].iloc[-2])
-            
-            ema_cross_down = (df['ema_fast'].iloc[-1] < df['ema_slow'].iloc[-1] and
-                             df['ema_fast'].iloc[-2] >= df['ema_slow'].iloc[-2])
-            
-            logger.debug(f"RSI: {last_row['rsi']:.2f} (Oversold: {rsi_oversold}, "
-                         f"Overbought: {rsi_overbought})")
-            logger.debug(f"EMA Crossover - Up: {ema_cross_up}, Down: {ema_cross_down}")
-            
-            # Generate signals
-            signals = TradingSignals(
-                long=rsi_oversold and ema_cross_up,
-                short=rsi_overbought and ema_cross_down
-            )
-            
-            logger.debug(f"Entry signals - Long: {signals['long']}, Short: {signals['short']}")
-            
-            return TradingResult(
-                data=df,
-                signals=signals
-            )
-            
-        except Exception as e:
-            logger.error(f"Error generating trading signals: {e}")
-            raise
+        self.config = config
+        self.rsi_period = config.rsi_ema.rsi_period
+        self.rsi_overbought = config.rsi_ema.rsi_overbought
+        self.rsi_oversold = config.rsi_ema.rsi_oversold
+        self.ema_fast = config.rsi_ema.ema_fast
+        self.ema_slow = config.rsi_ema.ema_slow
+
+        logger.info(f"Initialized RSI+EMA Strategy with parameters:")
+        logger.info(f"RSI Period: {self.rsi_period}")
+        logger.info(f"RSI Overbought: {self.rsi_overbought}")
+        logger.info(f"RSI Oversold: {self.rsi_oversold}")
+        logger.info(f"EMA Fast: {self.ema_fast}")
+        logger.info(f"EMA Slow: {self.ema_slow}")
+
+    def generate_trading_signals(self, klines: List[KlineData]) -> dict:
+        """
+        Generate trading signals based on RSI and EMA indicators
+
+        Args:
+            klines: List of KlineData objects containing historical price data
+
+        Returns:
+            Dictionary containing:
+                - 'data': DataFrame with indicators
+                - 'signals': Dictionary with 'long' and 'short' boolean keys
+        """
+        # Convert klines to DataFrame for technical analysis
+        df = convert_klines_to_dataframe(klines)
+
+        # Calculate RSI
+        rsi_indicator = RSIIndicator(close=df["close"], window=self.rsi_period)
+        df["rsi"] = rsi_indicator.rsi()
+
+        # Calculate EMAs
+        ema_fast = EMAIndicator(close=df["close"], window=self.ema_fast)
+        ema_slow = EMAIndicator(close=df["close"], window=self.ema_slow)
+        df["ema_fast"] = ema_fast.ema_indicator()
+        df["ema_slow"] = ema_slow.ema_indicator()
+
+        # Generate signals
+        df["long_signal"] = (df["rsi"] < self.rsi_oversold) & (  # RSI oversold
+            df["ema_fast"] > df["ema_slow"]
+        )  # Fast EMA above slow EMA
+
+        df["short_signal"] = (df["rsi"] > self.rsi_overbought) & (  # RSI overbought
+            df["ema_fast"] < df["ema_slow"]
+        )  # Fast EMA below slow EMA
+
+        # Get the latest signal
+        latest_signal = {
+            "long": bool(df["long_signal"].iloc[-1]),
+            "short": bool(df["short_signal"].iloc[-1]),
+        }
+
+        logger.debug(f"Latest RSI: {df['rsi'].iloc[-1]:.2f}")
+        logger.debug(f"Latest EMA Fast: {df['ema_fast'].iloc[-1]:.2f}")
+        logger.debug(f"Latest EMA Slow: {df['ema_slow'].iloc[-1]:.2f}")
+        logger.debug(f"Trading signals: {latest_signal}")
+
+        return {"data": df, "signals": latest_signal}

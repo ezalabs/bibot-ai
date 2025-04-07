@@ -10,7 +10,7 @@ from app.core.market_data import MarketData
 from app.services.position_manager import PositionManager
 
 # Configure logging
-logger = get_logger()
+logger = get_logger(__name__)
 
 class BiBot:
     """

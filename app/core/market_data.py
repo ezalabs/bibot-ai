@@ -1,12 +1,11 @@
 from typing import Dict, List, Any
-import pandas as pd
 from datetime import datetime
 
 from app.config.settings import BiBotConfig
 from app.utils.binance.client import BinanceClient, KlineData
 from app.utils.logging.logger import get_logger
 
-logger = get_logger()
+logger = get_logger(__name__)
 
 class MarketData:
     """
@@ -26,7 +25,7 @@ class MarketData:
         self.symbol = config.trading.trading_pair
         
         # Cache for historical data
-        self._klines_cache: Dict[str, Dict[str, pd.DataFrame]] = {}
+        self._klines_cache: Dict[str, Dict[str, List[KlineData]]] = {}
         self._last_update: Dict[str, Dict[str, datetime]] = {}
         self._cache_expiry = 60  # seconds
     
@@ -35,7 +34,7 @@ class MarketData:
         interval: str = '1m',
         limit: int = 100,
         use_cache: bool = True
-    ) -> pd.DataFrame:
+    ) -> List[KlineData]:
         """
         Get historical klines/candlestick data
         
@@ -45,7 +44,7 @@ class MarketData:
             use_cache: Whether to use cached data
             
         Returns:
-            DataFrame with historical price data
+            List of KlineData objects with historical price data
         """
         # Check if we have valid cached data
         current_time = datetime.now()
@@ -60,49 +59,23 @@ class MarketData:
         # Fetch new data
         logger.debug(f"Fetching {limit} klines for {self.symbol} at {interval} interval")
         try:
-            klines = self.client.get_klines(
+            klines: List[KlineData] = self.client.get_klines(
                 symbol=self.symbol,
                 interval=interval,
                 limit=limit
             )
             
-            # Convert to DataFrame
-            df = self._convert_klines_to_dataframe(klines)
-            
             # Cache the result
-            self._klines_cache[cache_key] = df
+            self._klines_cache[cache_key] = klines
             if cache_key not in self._last_update:
                 self._last_update[cache_key] = {}
             self._last_update[cache_key]['klines'] = current_time
             
-            return df
+            return klines
             
         except Exception as e:
             logger.error(f"Error fetching historical data: {e}")
             raise
-    
-    def _convert_klines_to_dataframe(self, klines: List[KlineData]) -> pd.DataFrame:
-        """
-        Convert raw klines data to pandas DataFrame
-        
-        Args:
-            klines: List of kline data from Binance API
-            
-        Returns:
-            DataFrame with properly formatted columns
-        """
-        df = pd.DataFrame(klines)
-        
-        # Convert timestamp to datetime
-        df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms')
-        
-        # Set datetime as index
-        df.set_index('datetime', inplace=True)
-        
-        # Sort by time ascending
-        df.sort_index(inplace=True)
-        
-        return df
     
     def get_current_price(self) -> float:
         """
@@ -113,8 +86,8 @@ class MarketData:
         """
         try:
             # Use the latest kline close price
-            df = self.get_historical_data(limit=1)
-            return df['close'].iloc[-1]
+            klines = self.get_historical_data(limit=1)
+            return klines[-1].close
         except Exception as e:
             logger.error(f"Error getting current price: {e}")
             raise
@@ -128,9 +101,9 @@ class MarketData:
         """
         try:
             # Get 24h of data
-            df = self.get_historical_data(interval='1h', limit=24)
-            first_price = df['close'].iloc[0]
-            last_price = df['close'].iloc[-1]
+            klines = self.get_historical_data(interval='1h', limit=24)
+            first_price = klines[0].close
+            last_price = klines[-1].close
             
             change_percent = ((last_price - first_price) / first_price) * 100
             return change_percent
@@ -146,8 +119,8 @@ class MarketData:
             24-hour volume
         """
         try:
-            df = self.get_historical_data(interval='1h', limit=24)
-            return df['volume'].sum()
+            klines = self.get_historical_data(interval='1h', limit=24)
+            return sum(kline.volume for kline in klines)
         except Exception as e:
             logger.error(f"Error calculating 24h volume: {e}")
             raise
