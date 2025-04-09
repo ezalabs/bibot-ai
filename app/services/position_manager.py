@@ -8,7 +8,7 @@ from app.utils.binance.client import BinanceClient
 from app.utils.storage.cache_manager import CacheManager
 from app.utils.logging.logger import get_logger
 
-logger = get_logger()
+logger = get_logger(__name__)
 
 class PositionManager:
     """
