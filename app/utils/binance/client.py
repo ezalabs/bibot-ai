@@ -111,6 +111,19 @@ class BinanceClient:
             # Test connection
             self._client.ping()
             logger.info("Successfully connected to Binance API")
+            
+            # Set leverage according to configuration
+            try:
+                trading_pair = self.config.trading.trading_pair
+                leverage = self.config.trading.leverage
+                result = self._client.futures_change_leverage(
+                    symbol=trading_pair,
+                    leverage=leverage
+                )
+                logger.info(f"Set leverage to {leverage}x for {trading_pair}")
+            except Exception as e:
+                logger.error(f"Failed to set leverage: {e}")
+                
         except Exception as e:
             logger.error(f"Failed to initialize Binance client: {e}")
             raise
