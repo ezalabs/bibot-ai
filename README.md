@@ -1,6 +1,6 @@
-# BiBot - AI Agentic Trading Bot for Binance Futures
+# BiBot AI - Agentic Trading Bot for Binance Futures
 
-An intelligent trading bot for Binance Futures that uses LangGraph and Large Language Models to analyze markets, select strategies, assess risks, and execute trades autonomously. BiBot follows an agentic workflow to make trading decisions with minimal human intervention.
+An intelligent trading bot for Binance Futures that uses LangGraph and Large Language Models to analyze markets, select strategies, assess risks, and execute trades autonomously. BiBot-AI follows an agentic workflow to make trading decisions with minimal human intervention.
 
 ## Features
 
@@ -15,7 +15,7 @@ An intelligent trading bot for Binance Futures that uses LangGraph and Large Lan
 
 ## Architecture
 
-BiBot uses a LangGraph-powered workflow with specialized nodes:
+BiBot-AI uses a LangGraph-powered workflow with specialized nodes:
 
 ```
 Market Analysis → Strategy Selection → Risk Assessment → Execution
@@ -66,8 +66,8 @@ For a more detailed architecture overview, see the [architecture documentation](
 First, clone the repository to your local machine:
 
 ```bash
-git clone https://github.com/ezalabs/bibot.git
-cd bibot
+git clone https://github.com/ezalabs/bibot-ai.git
+cd bibot-ai
 ```
 
 ### Install Dependencies
@@ -102,33 +102,33 @@ poetry run python -m app.main --cleanup
 - Ensure you have Docker installed on your machine. You can download it from [Docker's official website](https://www.docker.com/get-started).
 
 ### Building the Docker Image
-To build the Docker image for BiBot, navigate to the project directory and run the following command:
+To build the Docker image for BiBot-AI, navigate to the project directory and run the following command:
 
 ```bash
-docker build -t bibot .
+docker build -t bibot-ai .
 ```
 
 ### Running with Docker Compose
-The easiest way to run BiBot with Docker is using Docker Compose:
+The easiest way to run BiBot-AI with Docker is using Docker Compose:
 
 ```bash
 docker-compose up -d
 ```
 
-This will start BiBot in detached mode, with proper volume mapping for logs and cache.
+This will start BiBot-AI in detached mode, with proper volume mapping for logs and cache.
 
 ### Running the Docker Container Manually
 To run the Docker container manually, use the following command, ensuring to pass your environment variables from the `.env` file:
 
 ```bash
-docker run -v $(pwd)/cache:/app/cache -v $(pwd)/logs:/app/logs --env-file .env bibot
+docker run -v $(pwd)/cache:/app/cache -v $(pwd)/logs:/app/logs --env-file .env bibot-ai
 ```
 
 Note: The volume mounts ensure that both cache and logs are preserved between container restarts.
 
 ## Cache System
 
-BiBot includes a state persistence system that saves active positions to a local cache file. This ensures that:
+BiBot-AI includes a state persistence system that saves active positions to a local cache file. This ensures that:
 
 1. If the bot is restarted, it will reload any open positions and continue managing them
 2. No positions are orphaned if the bot crashes or is shut down
@@ -138,7 +138,7 @@ The cache files are stored in a `cache` directory in the project root, with file
 
 ## Environment Variables
 
-BiBot is configured through environment variables or a `.env` file. Here are the available configuration options:
+BiBot-AI is configured through environment variables or a `.env` file. Here are the available configuration options:
 
 ```
 # API Credentials
@@ -182,7 +182,7 @@ tail -f logs/bibot_session_<timestamp>.log
 
 ## Implementing Custom Trading Strategies
 
-BiBot is designed with an extensible architecture that allows you to easily implement custom trading strategies. The bot uses a strategy factory pattern along with type-safe Pydantic models for configuration.
+BiBot-AI is designed with an extensible architecture that allows you to easily implement custom trading strategies. The bot uses a strategy factory pattern along with type-safe Pydantic models for configuration.
 
 ### Strategy Architecture
 
@@ -335,4 +335,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Disclaimer
 
-Trading cryptocurrencies involves significant risk of loss and is not suitable for all investors. This bot is provided as-is without any guarantees. Always test thoroughly on the testnet before using with real funds. Past performance of trading strategies is not indicative of future results.
+Trading cryptocurrencies involves significant risk of loss and is not suitable for all investors. This bot is provided  for educational purposes only, as-is, without any guarantees. Always test thoroughly on the testnet before using with real funds. Past performance of trading strategies is not indicative of future results.
