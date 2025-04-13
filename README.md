@@ -21,6 +21,32 @@ BiBot uses a LangGraph-powered workflow with specialized nodes:
 Market Analysis → Strategy Selection → Risk Assessment → Execution
 ```
 
+```mermaid
+graph TD
+    Start([Start]) --> MarketAnalyzer
+    
+    %% LangGraph Nodes
+    MarketAnalyzer[Market Analyzer] --> StrategySelector
+    StrategySelector[Strategy Selector] --> RiskAnalyzer
+    RiskAnalyzer[Risk Analyzer] --> Decision{Decision}
+    
+    %% Decision paths
+    Decision -->|Favorable| Executor
+    Decision -->|Unfavorable| End
+    
+    %% Execution node
+    Executor[Executor] --> End([End])
+    
+    %% Styling
+    classDef llmNode fill:#c2e0f2,stroke:#6c8ebf,stroke-width:2px;
+    classDef decisionNode fill:#fff2cc,stroke:#d6b656,stroke-width:2px;
+    classDef terminalNode fill:#d5e8d4,stroke:#82b366,stroke-width:2px;
+    
+    class MarketAnalyzer,StrategySelector,RiskAnalyzer,Executor llmNode;
+    class Decision decisionNode;
+    class Start,End terminalNode;
+```
+
 Each node enriches the trading state with additional information and insights:
 
 - **Market Analyzer**: Evaluates current market conditions using technical indicators and price data
@@ -28,7 +54,7 @@ Each node enriches the trading state with additional information and insights:
 - **Risk Analyzer**: Assesses potential risks and determines if conditions are favorable
 - **Executor**: Executes trades when conditions are favorable
 
-For a more detailed architecture overview, see the [architecture documentation](docs/architecture.md).
+For a more detailed architecture overview, see the [architecture documentation](docs/architecture.md) and [technical documentation](docs/technical_architecture.md).
 
 ## Local Setup with Poetry
 
