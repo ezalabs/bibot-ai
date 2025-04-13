@@ -23,9 +23,9 @@ graph TD
     Executor[Executor] --> End([End])
     
     %% Styling
-    classDef llmNode fill:#c2e0f2,stroke:#6c8ebf,stroke-width:2px;
-    classDef decisionNode fill:#fff2cc,stroke:#d6b656,stroke-width:2px;
-    classDef terminalNode fill:#d5e8d4,stroke:#82b366,stroke-width:2px;
+    classDef llmNode fill:#c2e0f2,stroke:#6c8ebf,stroke-width:2px,color:black;
+    classDef decisionNode fill:#fff2cc,stroke:#d6b656,stroke-width:2px,color:black;
+    classDef terminalNode fill:#d5e8d4,stroke:#82b366,stroke-width:2px,color:black;
     
     class MarketAnalyzer,StrategySelector,RiskAnalyzer,Executor llmNode;
     class Decision decisionNode;

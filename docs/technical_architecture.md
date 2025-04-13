@@ -53,11 +53,11 @@ graph TB
     TradingExecutor -.-> Cache[(Cache Storage)]
     
     %% Styling
-    classDef mainComponents fill:#d5e8d4,stroke:#82b366,stroke-width:2px;
-    classDef langGraph fill:#dae8fc,stroke:#6c8ebf,stroke-width:2px;
-    classDef services fill:#ffe6cc,stroke:#d79b00,stroke-width:2px;
-    classDef external fill:#f8cecc,stroke:#b85450,stroke-width:2px;
-    classDef workflow fill:#e1d5e7,stroke:#9673a6,stroke-width:2px;
+    classDef mainComponents fill:#d5e8d4,stroke:#82b366,stroke-width:2px,color:black;
+    classDef langGraph fill:#dae8fc,stroke:#6c8ebf,stroke-width:2px,color:black;
+    classDef services fill:#ffe6cc,stroke:#d79b00,stroke-width:2px,color:black;
+    classDef external fill:#f8cecc,stroke:#b85450,stroke-width:2px,color:black;
+    classDef workflow fill:#e1d5e7,stroke:#9673a6,stroke-width:2px,color:black;
     
     class MainPy,TradingAgent mainComponents;
     class LangGraph,InitState,FinalState langGraph;
