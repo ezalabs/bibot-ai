@@ -1,0 +1,12 @@
+version: '3'
+
+services:
+  bibot:
+    build: .
+    volumes:
+      - ./cache:/app/cache
+      - ./logs:/app/logs
+    env_file:
+      - .env
+    restart: unless-stopped
+    command: ["--interval", "3600"]  # Run cycle every hour

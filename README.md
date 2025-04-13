@@ -1,18 +1,34 @@
-# BiBot - Python Trading Bot for Binance Futures
+# BiBot - AI Agentic Trading Bot for Binance Futures
 
-A Python-based trading bot for Binance Futures that implements various trading strategies.
+An intelligent trading bot for Binance Futures that uses LangGraph and Large Language Models to analyze markets, select strategies, assess risks, and execute trades autonomously. BiBot follows an agentic workflow to make trading decisions with minimal human intervention.
 
 ## Features
-- Automated trading using RSI and EMA crossover strategy [Default]
-- Take profit and stop loss order management
-- Position tracking with state persistence across restarts
-- Configurable trading parameters
-- Support for testnet trading
-- Support for custom strategies
 
-## Disclaimer
+- **AI-Powered Decision Making**: Uses Large Language Models to analyze markets and make trading decisions
+- **Agentic Workflow Architecture**: Structured LangGraph-based workflow with specialized nodes for different aspects of trading
+- **Autonomous Trading**: Continuously monitors markets and executes trades without human intervention
+- **Customizable Strategies**: Supports multiple trading strategies with dynamic selection based on market conditions
+- **Risk Management**: Built-in risk assessment before executing trades
+- **Position Tracking**: Maintains state of current positions across sessions
+- **Stop-Loss & Take-Profit**: Automatic order management for risk control
+- **Testnet Support**: Safe testing on Binance Futures Testnet before trading with real funds
 
-This bot is for educational purposes only. Always test thoroughly on testnet before using real funds. Trading cryptocurrencies involves significant risk. 
+## Architecture
+
+BiBot uses a LangGraph-powered workflow with specialized nodes:
+
+```
+Market Analysis → Strategy Selection → Risk Assessment → Execution
+```
+
+Each node enriches the trading state with additional information and insights:
+
+- **Market Analyzer**: Evaluates current market conditions using technical indicators and price data
+- **Strategy Selector**: Selects the optimal trading strategy based on market analysis
+- **Risk Analyzer**: Assesses potential risks and determines if conditions are favorable
+- **Executor**: Executes trades when conditions are favorable
+
+For a more detailed architecture overview, see the [architecture documentation](docs/architecture.md).
 
 ## Local Setup with Poetry
 
@@ -39,13 +55,19 @@ poetry install
 To run the bot locally, you can use the following command:
 
 ```bash
-poetry run python main.py
+poetry run python -m app.main
+```
+
+To run with a custom trading interval (in seconds):
+
+```bash
+poetry run python -m app.main --interval 300  # Run every 5 minutes
 ```
 
 To clean up all tracked positions and exit:
 
 ```bash
-poetry run python main.py --cleanup
+poetry run python -m app.main --cleanup
 ```
 
 ## Docker Setup
@@ -60,18 +82,27 @@ To build the Docker image for BiBot, navigate to the project directory and run t
 docker build -t bibot .
 ```
 
-### Running the Docker Container
-To run the Docker container, use the following command, ensuring to pass your environment variables from the `.env` file:
+### Running with Docker Compose
+The easiest way to run BiBot with Docker is using Docker Compose:
 
 ```bash
-docker run -v $(pwd)/cache:/app/cache --env-file .env bibot
+docker-compose up -d
 ```
 
-Note: The volume mount `-v $(pwd)/cache:/app/cache` is used to persist the cache between container restarts.
+This will start BiBot in detached mode, with proper volume mapping for logs and cache.
+
+### Running the Docker Container Manually
+To run the Docker container manually, use the following command, ensuring to pass your environment variables from the `.env` file:
+
+```bash
+docker run -v $(pwd)/cache:/app/cache -v $(pwd)/logs:/app/logs --env-file .env bibot
+```
+
+Note: The volume mounts ensure that both cache and logs are preserved between container restarts.
 
 ## Cache System
 
-BiBot now includes a state persistence system that saves active positions to a local cache file. This ensures that:
+BiBot includes a state persistence system that saves active positions to a local cache file. This ensures that:
 
 1. If the bot is restarted, it will reload any open positions and continue managing them
 2. No positions are orphaned if the bot crashes or is shut down
@@ -80,70 +111,48 @@ BiBot now includes a state persistence system that saves active positions to a l
 The cache files are stored in a `cache` directory in the project root, with filenames based on the trading pair being used.
 
 ## Environment Variables
-The following environment variables are required for the bot to function correctly. You can set these in your `.env` file:
 
-```plaintext
-# Binance API credentials
-BINANCE_API_KEY=your_api_key_here
-BINANCE_API_SECRET=your_api_secret_here
+BiBot is configured through environment variables or a `.env` file. Here are the available configuration options:
 
-# Logging configuration
-LOG_LEVEL=DEBUG  # Default: DEBUG (Options: DEBUG, INFO, WARNING, ERROR, CRITICAL)
-
-# Trading configuration
-TRADING_PAIR=BTCUSDT  # Default: BTCUSDT
-POSITION_SIZE=0.01     # Default: 0.01 (in BTC)
-LEVERAGE=5             # Default: 5
-
-# Scalping parameters
-TAKE_PROFIT_PERCENTAGE=0.1  # Default: 0.1%
-STOP_LOSS_PERCENTAGE=0.05    # Default: 0.05%
-MAX_POSITIONS=3               # Default: 3
-
-# Technical analysis parameters
-RSI_PERIOD=14                 # Default: 14
-RSI_OVERBOUGHT=70             # Default: 60
-RSI_OVERSOLD=30               # Default: 40
-EMA_FAST=9                    # Default: 9
-EMA_SLOW=21                   # Default: 21
-
-# Strategy
-STRATEGY="CUSTOM_STRATEGY" # Default: RSI_EMA
-
-# Testnet configuration
-USE_TESTNET=True              # Default: True (Set to False for live trading)
 ```
+# API Credentials
+BINANCE_API_KEY=your_api_key
+BINANCE_API_SECRET=your_api_secret
+OPENAI_API_KEY=your_openai_api_key
 
-### Example `.env` File
-Here's an example of what your `.env` file might look like:
-
-```plaintext
-BINANCE_API_KEY=your_api_key_here
-BINANCE_API_SECRET=your_api_secret_here
-LOG_LEVEL=INFO
-TRADING_PAIR=BTCUSDT
-POSITION_SIZE=0.01
-LEVERAGE=5
-TAKE_PROFIT_PERCENTAGE=0.1
-STOP_LOSS_PERCENTAGE=0.05
+# Runtime Settings
+BINANCE_TESTNET=true  # Use 'true' for testnet, 'false' for real trading
+TRADING_SYMBOL=BTCUSDT
+TRADING_LEVERAGE=5
 MAX_POSITIONS=3
+
+# LLM Configuration
+MODEL_NAME=gpt-4o-mini  # LLM model to use for trading decisions
+MODEL_TEMPERATURE=0.1   # Lower values for more deterministic outputs
+
+# Strategy Parameters
 RSI_PERIOD=14
 RSI_OVERBOUGHT=70
 RSI_OVERSOLD=30
-EMA_FAST=9
-EMA_SLOW=21
-USE_TESTNET=True
+EMA_FAST_PERIOD=12
+EMA_SLOW_PERIOD=26
+TAKE_PROFIT_PERCENTAGE=0.1
+STOP_LOSS_PERCENTAGE=0.05
+
+# Logging
+LOG_LEVEL=INFO  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+# Strategy
+STRATEGY=RSI_EMA  # Default strategy to use
 ```
 
-## Usage
-Once the bot is running, it will:
+## Logs
 
-1. Connect to Binance Futures (testnet or mainnet based on configuration)
-2. Load any existing positions from the cache
-3. Start monitoring the market for trade opportunities
-4. Place trades with stop-loss and take-profit orders when conditions are met
-5. Continuously monitor positions and clean up closed positions
-6. Save state to cache when positions change or when the bot shuts down
+Logs are stored in the `logs` directory with timestamps for each session. You can monitor the bot's activity in real-time:
+
+```bash
+tail -f logs/bibot_session_<timestamp>.log
+```
 
 ## Implementing Custom Trading Strategies
 
@@ -189,48 +198,6 @@ class TradingStrategy(ABC):
         return self.__class__.__name__
 ```
 
-### Data Conversion Utility
-
-BiBot provides a utility function for converting Binance `KlineData` to pandas DataFrames, which makes it easier to perform technical analysis. This utility is available at `app/utils/data_converter.py`:
-
-```python
-from typing import List
-import pandas as pd
-
-from app.utils.binance.client import KlineData
-
-def convert_klines_to_dataframe(klines: List[KlineData]) -> pd.DataFrame:
-    """
-    Convert a list of KlineData objects to a pandas DataFrame for technical analysis.
-    
-    Args:
-        klines: List of KlineData objects containing historical price/volume data
-        
-    Returns:
-        DataFrame with properly formatted columns and datetime index
-    """
-    # Create DataFrame from KlineData list
-    df = pd.DataFrame([{
-        'timestamp': k['timestamp'],
-        'open': k['open'],
-        'high': k['high'],
-        'low': k['low'],
-        'close': k['close'],
-        'volume': k['volume'],
-        'quote_volume': k['quote_volume'],
-        'trades': k['trades'],
-        'taker_buy_base': k['taker_buy_base'],
-        'taker_buy_quote': k['taker_buy_quote']
-    } for k in klines])
-    
-    # Convert timestamp to datetime and set as index
-    df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms')
-    df.set_index('datetime', inplace=True)
-    df.sort_index(inplace=True)
-    
-    return df
-```
-
 ### Creating a Custom Strategy
 
 To implement your own strategy:
@@ -252,7 +219,7 @@ from app.utils.binance.client import KlineData
 from app.utils.data_converter import convert_klines_to_dataframe
 from app.utils.logging.logger import get_logger
 
-logger = get_logger()
+logger = get_logger(__name__)
 
 class MaCrossStrategy(TradingStrategy):
     """Moving Average Crossover Strategy"""
@@ -308,133 +275,38 @@ class MaCrossStrategy(TradingStrategy):
         }
 ```
 
-Then you can set the strategy in your `.env` file:
-
-```plaintext
-STRATEGY=MA_CROSS
-```
-
 ### Registering Your Strategy
 
-To make your strategy available to the factory, add it to the `app/strategies/__init__.py` file:
+Update the strategy factory to include your custom strategy:
 
 ```python
-from app.strategies.strategy_base import TradingStrategy, TradingResult, TradingSignals
-from app.strategies.implementations.rsi_ema_strategy import RsiEmaStrategy
-from app.strategies.implementations.ma_cross_strategy import MaCrossStrategy
-from app.strategies.factory import StrategyFactory
-
-# Register all available strategies
-StrategyFactory.register_strategy("RSI_EMA", RsiEmaStrategy)
+# In app/strategies/factory.py or __init__.py
 StrategyFactory.register_strategy("MA_CROSS", MaCrossStrategy)
-
-# Export classes for easier imports
-__all__ = [
-    "TradingStrategy", 
-    "TradingResult", 
-    "TradingSignals",
-    "RsiEmaStrategy", 
-    "MaCrossStrategy", 
-    "StrategyFactory"
-]
-```
-
-### Using Your Custom Strategy
-
-To use your custom strategy with BiBot, you can either specify it in your environment configuration or pass it directly to the BiBot constructor:
-
-```python
-# In .env file
-STRATEGY=MA_CROSS
-
-# Or when creating the BiBot instance directly
-from app.core.bibot import BiBot
-from app.config.settings import load_config
-
-config = load_config()
-config.strategy = "MA_CROSS"  # Override strategy
-bot = BiBot(config=config)
-```
-
-The BiBot class automatically uses the StrategyFactory to create the right strategy:
-
-```python
-# Simplified from app/core/bibot.py
-self.strategy = StrategyFactory.create_strategy(config=self.config)
-logger.info(f"Using trading strategy: {self.strategy.get_name()}")
-```
-
-### Strategy Selection
-
-The StrategyFactory handles strategy creation and selection based on your configuration:
-
-```python
-# app/strategies/factory.py
-from typing import Dict, Type, Optional
-from app.strategies.strategy_base import TradingStrategy
-from app.config.settings import BiBotConfig, load_config
-
-class StrategyFactory:
-    """Factory for creating trading strategy instances"""
-    
-    # Registry of available strategies
-    _strategies: Dict[str, Type[TradingStrategy]] = {}
-    
-    @classmethod
-    def register_strategy(cls, name: str, strategy_class: Type[TradingStrategy]) -> None:
-        """
-        Register a strategy with the factory
-        
-        Args:
-            name: Name identifier for the strategy
-            strategy_class: Strategy class to register
-        """
-        cls._strategies[name] = strategy_class
-    
-    @classmethod
-    def create_strategy(cls, name: Optional[str] = None, config: Optional[BiBotConfig] = None) -> TradingStrategy:
-        """
-        Create a strategy instance
-        
-        Args:
-            name: Optional name of strategy to create (defaults to config.strategy)
-            config: Optional configuration to pass to strategy
-            
-        Returns:
-            Instantiated strategy
-        """
-        config = config or load_config()
-        name = name or config.strategy
-        
-        strategy_class = cls._strategies.get(name)
-        if not strategy_class:
-            # Fallback to default if strategy not found
-            fallback = next(iter(cls._strategies.values()))
-            return fallback(config=config)
-        
-        return strategy_class(config=config)
 ```
 
 Then you can set the strategy in your `.env` file:
 
-```plaintext
+```
 STRATEGY=MA_CROSS
 ```
 
-### Best Practices for Custom Strategies
+## Safety Precautions
 
-1. **Type Safety**: Use type hints and Pydantic models for better code quality
-2. **Configuration**: Load parameters from the centralized Pydantic-based config
-3. **Logging**: Use the logger to provide informative debug messages about your strategy's decisions
-4. **Error Handling**: Implement proper error handling within your strategy
-5. **Testing**: Write unit tests for your strategy logic
-6. **Documentation**: Add docstrings to your strategy class and methods
-7. **Data Conversion**: Use the provided `convert_klines_to_dataframe` utility for consistent handling of market data
-
-By following this pattern, you can create and experiment with various trading strategies while keeping the core trading infrastructure intact and type-safe.
+- **Always start with the testnet** (`BINANCE_TESTNET=true`)
+- Begin with small position sizes
+- Use the built-in stop-loss mechanisms
+- Monitor the bot's activity using logs
+- Regularly check your positions on the Binance interface
+- Implement proper API key security (read-only for testing, limited IP access)
 
 ## Contributing
-Feel free to contribute to the project by submitting issues or pull requests.
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
-This project is licensed under the MIT License.
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Disclaimer
+
+Trading cryptocurrencies involves significant risk of loss and is not suitable for all investors. This bot is provided as-is without any guarantees. Always test thoroughly on the testnet before using with real funds. Past performance of trading strategies is not indicative of future results.

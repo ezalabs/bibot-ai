@@ -116,7 +116,7 @@ class BinanceClient:
             try:
                 trading_pair = self.config.trading.trading_pair
                 leverage = self.config.trading.leverage
-                result = self._client.futures_change_leverage(
+                self._client.futures_change_leverage(
                     symbol=trading_pair,
                     leverage=leverage
                 )

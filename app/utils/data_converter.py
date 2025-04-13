@@ -30,6 +30,8 @@ def convert_klines_to_dataframe(klines: List[KlineData]) -> pd.DataFrame:
     # Convert timestamp to datetime and set as index
     df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms')
     df.set_index('datetime', inplace=True)
-    df.sort_index(inplace=True)
+    
+    # Sort the index
+    df.sort_index(ascending=True, inplace=True)
     
     return df 

@@ -136,3 +136,10 @@ dmypy.json
 
 # Cache files
 /cache/
+
+# BiBot specific
+logs/*
+!logs/.gitkeep
+cache/
+.env
+.binance_config

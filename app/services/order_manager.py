@@ -13,7 +13,7 @@ from app.models.position import Position, OrderInfo
 from app.utils.logging.logger import get_logger
 from app.utils.binance.client import BinanceClient
 
-logger = get_logger()
+logger = get_logger(__name__)
 
 class OrderManager:
     """Manages order placement and position tracking"""

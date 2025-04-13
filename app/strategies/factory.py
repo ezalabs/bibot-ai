@@ -4,7 +4,7 @@ from app.strategies.strategy_base import TradingStrategy
 from app.strategies.implementations.rsi_ema_strategy import RsiEmaStrategy
 from app.utils.logging.logger import get_logger
 
-logger = get_logger()
+logger = get_logger(__name__)
 
 class StrategyFactory:
     """Factory class for creating trading strategy instances"""

@@ -4,7 +4,7 @@ from app.utils.logging.logger import get_logger
 from pathlib import Path
 
 # Configure logging
-logger = get_logger()
+logger = get_logger(__name__)
 
 
 class CacheManager:

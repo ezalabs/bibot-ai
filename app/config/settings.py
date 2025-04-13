@@ -4,19 +4,55 @@ from typing import Optional
 from dotenv import load_dotenv
 import logging
 
-from app.models.config import BinanceCredentials, LoggingConfig, RsiEmaConfig, TradingConfig
+from app.models.config import BinanceCredentials, LoggingConfig, TradingConfig
 
-# Load environment variables
+
 load_dotenv()
 
-# Create a logger for this module
+
 logger = logging.getLogger(__name__)
 
+class LLMConfig(BaseModel):
+    """LLM configuration for AI components."""
+    model_name: str = Field(default_factory=lambda: os.environ.get("MODEL_NAME", "gpt-4o-mini"))
+    temperature: float = 0.1
+    max_tokens: Optional[int] = None
+
+
+class RSIEMAConfig(BaseModel):
+    """Configuration for RSI+EMA strategy."""
+    rsi_period: int = 14
+    rsi_overbought: float = 60.0  # More conservative values
+    rsi_oversold: float = 40.0
+    ema_fast: int = 9
+    ema_slow: int = 21
+
+
+class TradingConfig(BaseModel):
+    """Configuration for trading parameters."""
+    trading_pair: str = "BTCUSDT"
+    position_size: float = 0.01  # Default size for positions
+    leverage: int = 5
+    max_positions: int = 3
+    max_drawdown: float = 0.10  # Maximum allowed drawdown (10%)
+    max_volatility: float = 3.0  # Maximum allowed market volatility
+    use_testnet: bool = True
+    trading_interval: int = Field(default=5, description="Interval between trading runs in minutes")
+
+
 class BiBotConfig(BaseModel):
-    """Main configuration for the trading bot"""
-    credentials: BinanceCredentials
+    """Main configuration model for BiBot."""
+    app_name: str = "BiBot - AI Trading Agent"
+    testnet: bool = True
+    api_key: Optional[str] = Field(default_factory=lambda: os.environ.get("BINANCE_API_KEY"))
+    api_secret: Optional[str] = Field(default_factory=lambda: os.environ.get("BINANCE_API_SECRET"))
+    credentials: BinanceCredentials = Field(default_factory=lambda: BinanceCredentials(
+        api_key=os.environ.get("BINANCE_API_KEY", ""),
+        api_secret=os.environ.get("BINANCE_API_SECRET", "")
+    ))
     trading: TradingConfig = Field(default_factory=TradingConfig)
-    rsi_ema: RsiEmaConfig = Field(default_factory=RsiEmaConfig)
+    rsi_ema: RSIEMAConfig = Field(default_factory=RSIEMAConfig)
+    llm: LLMConfig = Field(default_factory=LLMConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     strategy: str = Field(default="RSI_EMA", description="Trading strategy to use")
 
@@ -45,6 +81,7 @@ class BiBotConfig(BaseModel):
                 'stop_loss_percentage': float(values.get('stop_loss_percentage', os.getenv('STOP_LOSS_PERCENTAGE', 0.05))),
                 'max_positions': int(values.get('max_positions', os.getenv('MAX_POSITIONS', 3))),
                 'use_testnet': bool(values.get('use_testnet', os.getenv('USE_TESTNET', 'True').lower() == 'true')),
+                'trading_interval': int(values.get('trading_interval', os.getenv('TRADING_INTERVAL', 5))),
             },
             'rsi_ema': {
                 'rsi_period': int(values.get('rsi_period', os.getenv('RSI_PERIOD', 14))),
